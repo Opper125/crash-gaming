@@ -2,618 +2,151 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>⚙️ Admin Panel</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>⚙️ Admin</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        :root {
-            --bg: #0f0f1a;
-            --bg-card: #1a1a2e;
-            --bg-elevated: #252540;
-            --border: #2a2a4a;
-            --primary: #7c5cff;
-            --success: #00d68f;
-            --danger: #ff6b6b;
-            --warning: #ffca28;
-            --text: #ffffff;
-            --text-secondary: #9ca3af;
-            --text-muted: #6b7280;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: var(--bg);
-            color: var(--text);
-            min-height: 100vh;
-            padding: 16px;
-            padding-bottom: 100px;
-        }
-
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root { --bg: #0f0f1a; --card: #1a1a2e; --border: #2a2a4a; --primary: #7c5cff; --success: #00d68f; --danger: #ff6b6b; --text: #fff; --text2: #9ca3af; }
+        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); padding: 16px; min-height: 100vh; }
         .hidden { display: none !important; }
-
-        /* Header */
-        .admin-header {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            margin-bottom: 20px;
-        }
-
-        .back-btn {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            color: var(--text);
-            font-size: 18px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .admin-title {
-            flex: 1;
-        }
-
-        .admin-title h1 {
-            font-size: 20px;
-            font-weight: 700;
-        }
-
-        .admin-title p {
-            font-size: 12px;
-            color: var(--text-secondary);
-        }
-
-        /* Loading & Error */
-        .loading-screen, .error-screen {
-            position: fixed;
-            inset: 0;
-            background: var(--bg);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 1000;
-        }
-
-        .loading-content, .error-content {
-            text-align: center;
-            padding: 20px;
-        }
-
-        .spinner {
-            width: 50px;
-            height: 50px;
-            border: 4px solid var(--border);
-            border-top-color: var(--primary);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 20px;
-        }
-
-        @keyframes spin { to { transform: rotate(360deg); } }
-
-        .error-icon { font-size: 60px; margin-bottom: 16px; }
-        .error-title { font-size: 20px; color: var(--danger); margin-bottom: 8px; }
-
-        /* Stats Grid */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 12px;
-            margin-bottom: 20px;
-        }
-
-        .stat-card {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 16px;
-            text-align: center;
-        }
-
-        .stat-card.highlight {
-            background: linear-gradient(135deg, var(--primary), #5c9cff);
-            border: none;
-        }
-
-        .stat-icon { font-size: 24px; margin-bottom: 8px; }
-        .stat-value { font-size: 24px; font-weight: 800; }
-        .stat-label { font-size: 11px; color: var(--text-secondary); margin-top: 4px; }
-        .stat-card.highlight .stat-label { color: rgba(255,255,255,0.8); }
-
-        /* Section */
-        .section {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: 14px;
-            margin-bottom: 16px;
-            overflow: hidden;
-        }
-
-        .section-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 16px;
-            cursor: pointer;
-            border-bottom: 1px solid var(--border);
-        }
-
-        .section-header h2 {
-            font-size: 15px;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .badge {
-            background: var(--danger);
-            color: white;
-            padding: 2px 8px;
-            border-radius: 10px;
-            font-size: 11px;
-            font-weight: 600;
-        }
-
-        .section-arrow {
-            color: var(--text-muted);
-            transition: transform 0.3s;
-        }
-
-        .section-content {
-            padding: 16px;
-        }
-
-        .section-content.collapsed {
-            display: none;
-        }
-
-        /* Config Display */
-        .config-box {
-            background: var(--bg);
-            border: 1px solid var(--border);
-            border-radius: 10px;
-            padding: 14px;
-            margin-bottom: 12px;
-        }
-
-        .config-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 8px 0;
-            border-bottom: 1px solid var(--border);
-            font-size: 13px;
-        }
-
-        .config-item:last-child { border-bottom: none; }
-        .config-label { color: var(--text-secondary); }
-        .config-value { 
-            font-family: monospace; 
-            font-size: 11px;
-            max-width: 150px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        /* Withdrawal Item */
-        .withdrawal-item {
-            background: var(--bg);
-            border-radius: 12px;
-            padding: 16px;
-            margin-bottom: 12px;
-        }
-
-        .wd-header {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 10px;
-        }
-
-        .wd-user { font-weight: 600; font-size: 14px; }
-        .wd-amount { font-weight: 700; color: var(--warning); font-size: 16px; }
-
-        .wd-info {
-            font-size: 12px;
-            color: var(--text-muted);
-            margin-bottom: 10px;
-        }
-
-        .wd-address {
-            background: var(--bg-card);
-            padding: 10px;
-            border-radius: 8px;
-            font-size: 11px;
-            font-family: monospace;
-            word-break: break-all;
-            color: var(--text-secondary);
-            margin-bottom: 12px;
-        }
-
-        .wd-actions {
-            display: flex;
-            gap: 10px;
-        }
-
-        /* User Item */
-        .user-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 14px;
-            background: var(--bg);
-            border-radius: 10px;
-            margin-bottom: 8px;
-            cursor: pointer;
-        }
-
-        .user-info { display: flex; flex-direction: column; }
-        .user-name { font-weight: 600; font-size: 14px; }
-        .user-id { font-size: 11px; color: var(--text-muted); }
-        .user-balance { font-weight: 700; color: var(--success); font-size: 15px; }
-
-        .user-detail {
-            background: var(--bg);
-            border-radius: 12px;
-            padding: 16px;
-            margin-bottom: 12px;
-        }
-
-        .user-detail-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 16px;
-        }
-
-        .user-stats {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 10px;
-            margin-bottom: 16px;
-        }
-
-        .user-stat {
-            text-align: center;
-            padding: 10px;
-            background: var(--bg-card);
-            border-radius: 8px;
-        }
-
-        .user-stat-value { font-size: 16px; font-weight: 700; }
-        .user-stat-label { font-size: 10px; color: var(--text-muted); }
-
-        .balance-editor {
-            display: flex;
-            gap: 10px;
-        }
-
-        .balance-editor input {
-            flex: 1;
-            padding: 12px;
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            color: var(--text);
-            font-size: 14px;
-        }
-
-        /* Buttons */
-        .btn {
-            padding: 12px 20px;
-            border: none;
-            border-radius: 10px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: transform 0.2s;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 6px;
-        }
-
-        .btn:active { transform: scale(0.98); }
-        .btn-primary { background: var(--primary); color: white; }
+        .header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+        .back { width: 40px; height: 40px; border-radius: 50%; background: var(--card); border: 1px solid var(--border); color: var(--text); font-size: 18px; cursor: pointer; }
+        .title h1 { font-size: 20px; }
+        .title p { font-size: 12px; color: var(--text2); }
+        .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+        .stat { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; text-align: center; }
+        .stat .v { font-size: 24px; font-weight: 800; color: var(--primary); }
+        .stat .l { font-size: 11px; color: var(--text2); margin-top: 4px; }
+        .section { background: var(--card); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 16px; overflow: hidden; }
+        .section-head { display: flex; justify-content: space-between; padding: 16px; cursor: pointer; border-bottom: 1px solid var(--border); }
+        .section-head h2 { font-size: 15px; }
+        .badge { background: var(--danger); color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px; margin-left: 8px; }
+        .section-body { padding: 16px; }
+        .section-body.collapsed { display: none; }
+        .config-item { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+        .config-item:last-child { border: none; }
+        .config-item .label { color: var(--text2); }
+        .config-item .value { font-family: monospace; font-size: 11px; max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
+        .wd-item { background: var(--bg); border-radius: 10px; padding: 14px; margin-bottom: 12px; }
+        .wd-head { display: flex; justify-content: space-between; margin-bottom: 8px; }
+        .wd-user { font-weight: 600; }
+        .wd-amount { color: #ffca28; font-weight: 700; }
+        .wd-info { font-size: 12px; color: var(--text2); margin-bottom: 8px; }
+        .wd-addr { background: var(--card); padding: 8px; border-radius: 6px; font-size: 10px; font-family: monospace; word-break: break-all; margin-bottom: 10px; }
+        .wd-actions { display: flex; gap: 10px; }
+        .btn { flex: 1; padding: 12px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 14px; }
         .btn-success { background: var(--success); color: white; }
         .btn-danger { background: var(--danger); color: white; }
-        .btn-block { width: 100%; }
-        .btn-sm { padding: 10px 16px; font-size: 13px; }
-        .btn-flex { flex: 1; }
-
-        /* Form */
-        .form-group {
-            margin-bottom: 14px;
-        }
-
-        .form-group label {
-            display: block;
-            font-size: 12px;
-            color: var(--text-secondary);
-            margin-bottom: 6px;
-        }
-
-        .form-group input {
-            width: 100%;
-            padding: 12px;
-            background: var(--bg);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            color: var(--text);
-            font-size: 14px;
-        }
-
-        .form-group input:focus {
-            border-color: var(--primary);
-            outline: none;
-        }
-
-        /* Search */
-        .search-box {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 16px;
-        }
-
-        .search-box input {
-            flex: 1;
-            padding: 12px;
-            background: var(--bg);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            color: var(--text);
-            font-size: 14px;
-        }
-
-        /* Empty State */
-        .empty-state {
-            text-align: center;
-            padding: 30px;
-            color: var(--text-muted);
-        }
-
-        .empty-icon { font-size: 40px; margin-bottom: 12px; opacity: 0.5; }
-
-        /* Game Controls */
-        .game-controls {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-            margin-bottom: 16px;
-        }
-
-        /* Toast */
-        .toast-container {
-            position: fixed;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 9999;
-            width: 90%;
-            max-width: 360px;
-        }
-
-        .toast {
-            padding: 14px 20px;
-            border-radius: 10px;
-            color: white;
-            font-size: 14px;
-            text-align: center;
-            margin-bottom: 10px;
-            animation: toastIn 0.3s ease;
-        }
-
-        @keyframes toastIn {
-            from { opacity: 0; transform: translateY(-20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
+        .btn-primary { background: var(--primary); color: white; }
+        .user-item { display: flex; justify-content: space-between; padding: 12px; background: var(--bg); border-radius: 8px; margin-bottom: 8px; cursor: pointer; }
+        .user-name { font-weight: 600; font-size: 14px; }
+        .user-id { font-size: 11px; color: var(--text2); }
+        .user-bal { color: var(--success); font-weight: 700; }
+        .form-group { margin-bottom: 14px; }
+        .form-group label { display: block; font-size: 12px; color: var(--text2); margin-bottom: 6px; }
+        .form-group input { width: 100%; padding: 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 14px; }
+        .search { display: flex; gap: 10px; margin-bottom: 16px; }
+        .search input { flex: 1; padding: 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; color: var(--text); }
+        .empty { text-align: center; padding: 30px; color: var(--text2); }
+        .toast-container { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 9999; width: 90%; max-width: 360px; }
+        .toast { padding: 14px; border-radius: 10px; color: white; text-align: center; margin-bottom: 10px; }
         .toast.success { background: var(--success); }
         .toast.error { background: var(--danger); }
         .toast.info { background: var(--primary); }
-
-        /* Refresh FAB */
-        .refresh-fab {
-            position: fixed;
-            bottom: 24px;
-            right: 24px;
-            width: 56px;
-            height: 56px;
-            border-radius: 50%;
-            background: var(--primary);
-            border: none;
-            color: white;
-            font-size: 24px;
-            cursor: pointer;
-            box-shadow: 0 4px 20px rgba(124, 92, 255, 0.4);
-            z-index: 100;
-        }
-
-        /* Users List */
-        .users-list {
-            max-height: 400px;
-            overflow-y: auto;
-        }
+        .balance-edit { display: flex; gap: 10px; margin-top: 10px; }
+        .balance-edit input { flex: 1; padding: 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text); }
+        .balance-edit button { padding: 10px 16px; background: var(--primary); border: none; border-radius: 6px; color: white; font-weight: 600; cursor: pointer; }
+        .game-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
     </style>
 </head>
 <body>
-    <!-- Loading -->
-    <div class="loading-screen" id="loadingScreen">
-        <div class="loading-content">
-            <div class="spinner"></div>
-            <p>Verifying admin access...</p>
-        </div>
-    </div>
-
-    <!-- Access Denied -->
-    <div class="error-screen hidden" id="errorScreen">
-        <div class="error-content">
-            <div class="error-icon">⛔</div>
-            <div class="error-title">Access Denied</div>
-            <p style="color: var(--text-secondary);">You are not authorized to access this page.</p>
-            <button class="btn btn-primary" onclick="goBack()" style="margin-top: 20px;">Go Back</button>
-        </div>
-    </div>
-
-    <!-- Admin Panel -->
-    <div class="hidden" id="adminPanel">
-        <!-- Header -->
-        <div class="admin-header">
-            <button class="back-btn" onclick="goBack()">←</button>
-            <div class="admin-title">
+    <div id="loading" class="empty">Loading...</div>
+    <div id="denied" class="empty hidden">⛔ Access Denied</div>
+    
+    <div id="admin" class="hidden">
+        <div class="header">
+            <button class="back" onclick="goBack()">←</button>
+            <div class="title">
                 <h1>⚙️ Admin Panel</h1>
-                <p>Crash Game Management</p>
+                <p>Manage your Crash Game</p>
             </div>
         </div>
 
-        <!-- Stats -->
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-icon">👥</div>
-                <div class="stat-value" id="statUsers">0</div>
-                <div class="stat-label">Total Users</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-icon">🎮</div>
-                <div class="stat-value" id="statGames">0</div>
-                <div class="stat-label">Total Games</div>
-            </div>
-            <div class="stat-card highlight">
-                <div class="stat-icon">💰</div>
-                <div class="stat-value" id="statWagered">0</div>
-                <div class="stat-label">Total Wagered</div>
-            </div>
-            <div class="stat-card highlight">
-                <div class="stat-icon">💵</div>
-                <div class="stat-value" id="statBalance">0</div>
-                <div class="stat-label">User Balances</div>
-            </div>
+        <div class="stats">
+            <div class="stat"><div class="v" id="sUsers">0</div><div class="l">Users</div></div>
+            <div class="stat"><div class="v" id="sGames">0</div><div class="l">Games</div></div>
+            <div class="stat"><div class="v" id="sWagered">0</div><div class="l">Wagered</div></div>
+            <div class="stat"><div class="v" id="sBalance">0</div><div class="l">Balances</div></div>
         </div>
 
-        <!-- Config Info -->
         <div class="section">
-            <div class="section-header" onclick="toggleSection('config')">
-                <h2>📋 Configuration</h2>
-                <span class="section-arrow" id="configArrow">▼</span>
+            <div class="section-head" onclick="toggle('config')">
+                <h2>📋 Config</h2><span id="configA">▼</span>
             </div>
-            <div class="section-content" id="configContent">
-                <div class="config-box">
-                    <div class="config-item">
-                        <span class="config-label">Bin ID:</span>
-                        <span class="config-value" id="configBinId">-</span>
-                    </div>
-                    <div class="config-item">
-                        <span class="config-label">Admin ID:</span>
-                        <span class="config-value" id="configAdminId">-</span>
-                    </div>
-                    <div class="config-item">
-                        <span class="config-label">TON Wallet:</span>
-                        <span class="config-value" id="configWallet">-</span>
-                    </div>
-                </div>
+            <div class="section-body" id="configB">
+                <div class="config-item"><span class="label">BIN_ID:</span><span class="value" id="cfgBin">-</span></div>
+                <div class="config-item"><span class="label">Admin ID:</span><span class="value" id="cfgAdmin">-</span></div>
+                <div class="config-item"><span class="label">Wallet:</span><span class="value" id="cfgWallet">-</span></div>
             </div>
         </div>
 
-        <!-- Pending Withdrawals -->
         <div class="section">
-            <div class="section-header" onclick="toggleSection('withdrawals')">
-                <h2>💸 Withdrawals <span class="badge" id="wdBadge">0</span></h2>
-                <span class="section-arrow" id="withdrawalsArrow">▼</span>
+            <div class="section-head" onclick="toggle('wd')">
+                <h2>💸 Withdrawals <span class="badge" id="wdBadge">0</span></h2><span id="wdA">▼</span>
             </div>
-            <div class="section-content" id="withdrawalsContent">
-                <div id="withdrawalsList">
-                    <div class="empty-state">
-                        <div class="empty-icon">✅</div>
-                        <p>No pending withdrawals</p>
-                    </div>
-                </div>
+            <div class="section-body" id="wdB">
+                <div id="wdList"><div class="empty">No pending</div></div>
             </div>
         </div>
 
-        <!-- User Management -->
         <div class="section">
-            <div class="section-header" onclick="toggleSection('users')">
-                <h2>👥 Users</h2>
-                <span class="section-arrow" id="usersArrow">▼</span>
+            <div class="section-head" onclick="toggle('users')">
+                <h2>👥 Users</h2><span id="usersA">▼</span>
             </div>
-            <div class="section-content collapsed" id="usersContent">
-                <div class="search-box">
-                    <input type="text" id="userSearchInput" placeholder="Search by Telegram ID...">
-                    <button class="btn btn-primary btn-sm" onclick="searchUser()">🔍</button>
+            <div class="section-body collapsed" id="usersB">
+                <div class="search">
+                    <input type="text" id="searchInput" placeholder="Telegram ID...">
+                    <button class="btn btn-primary" onclick="searchUser()">🔍</button>
                 </div>
-                <div id="userSearchResult"></div>
+                <div id="searchResult"></div>
                 <h4 style="margin: 16px 0 12px; font-size: 14px;">All Users</h4>
-                <div class="users-list" id="usersList">
-                    <div class="empty-state">
-                        <div class="empty-icon">👥</div>
-                        <p>No users yet</p>
-                    </div>
-                </div>
+                <div id="usersList"><div class="empty">No users</div></div>
             </div>
         </div>
 
-        <!-- Game Controls -->
         <div class="section">
-            <div class="section-header" onclick="toggleSection('game')">
-                <h2>🎮 Game Control</h2>
-                <span class="section-arrow" id="gameArrow">▼</span>
+            <div class="section-head" onclick="toggle('game')">
+                <h2>🎮 Game</h2><span id="gameA">▼</span>
             </div>
-            <div class="section-content collapsed" id="gameContent">
-                <div class="game-controls">
-                    <button class="btn btn-primary" onclick="forceNewGame()">🚀 New Game</button>
-                    <button class="btn btn-danger" onclick="forceCrash()">💥 Force Crash</button>
+            <div class="section-body collapsed" id="gameB">
+                <div class="game-btns">
+                    <button class="btn btn-primary" onclick="newGame()">🚀 New</button>
+                    <button class="btn btn-danger" onclick="forceCrash()">💥 Crash</button>
                 </div>
                 <div class="form-group">
-                    <label>Set Next Crash Point</label>
-                    <input type="number" id="nextCrashInput" placeholder="e.g., 2.50" step="0.01" min="1">
+                    <label>Next Crash Point</label>
+                    <input type="number" id="crashInput" placeholder="2.50" step="0.01" min="1">
                 </div>
-                <button class="btn btn-primary btn-block" onclick="setNextCrash()">Set Crash Point</button>
+                <button class="btn btn-primary" style="width:100%;" onclick="setCrash()">Set</button>
             </div>
         </div>
 
-        <!-- Settings -->
         <div class="section">
-            <div class="section-header" onclick="toggleSection('settings')">
-                <h2>⚙️ Settings</h2>
-                <span class="section-arrow" id="settingsArrow">▼</span>
+            <div class="section-head" onclick="toggle('settings')">
+                <h2>⚙️ Settings</h2><span id="settingsA">▼</span>
             </div>
-            <div class="section-content collapsed" id="settingsContent">
-                <div class="form-group">
-                    <label>Minimum Bet (TON)</label>
-                    <input type="number" id="settingMinBet" step="0.1">
-                </div>
-                <div class="form-group">
-                    <label>Maximum Bet (TON)</label>
-                    <input type="number" id="settingMaxBet" step="1">
-                </div>
-                <div class="form-group">
-                    <label>Minimum Withdrawal (TON)</label>
-                    <input type="number" id="settingMinWithdraw" step="0.1">
-                </div>
-                <div class="form-group">
-                    <label>House Edge (%)</label>
-                    <input type="number" id="settingHouseEdge" step="0.1">
-                </div>
-                <button class="btn btn-success btn-block" onclick="saveSettings()">💾 Save Settings</button>
+            <div class="section-body collapsed" id="settingsB">
+                <div class="form-group"><label>Min Bet</label><input type="number" id="setMinBet" step="0.1"></div>
+                <div class="form-group"><label>Max Bet</label><input type="number" id="setMaxBet" step="1"></div>
+                <div class="form-group"><label>Min Withdraw</label><input type="number" id="setMinWd" step="0.1"></div>
+                <div class="form-group"><label>House Edge %</label><input type="number" id="setEdge" step="0.1"></div>
+                <button class="btn btn-success" style="width:100%;" onclick="saveSettings()">💾 Save</button>
             </div>
         </div>
     </div>
 
-    <!-- Refresh FAB -->
-    <button class="refresh-fab hidden" id="refreshFab" onclick="refreshAll()">🔄</button>
-
-    <!-- Toast Container -->
-    <div class="toast-container" id="toastContainer"></div>
+    <div class="toast-container" id="toasts"></div>
 
     <script src="api.js"></script>
     <script src="admin.js"></script>
