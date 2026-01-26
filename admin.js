@@ -1,450 +1,233 @@
-// ===== Admin Panel Logic =====
-
 const tg = window.Telegram?.WebApp;
 let isAdmin = false;
 let allUsers = {};
-let selectedUser = null;
-
-// ===== Initialization =====
 
 document.addEventListener('DOMContentLoaded', async () => {
-    // Init Telegram
-    if (tg) {
-        tg.ready();
-        tg.expand();
-    }
-    
-    await checkAdminAccess();
+    if (tg) { tg.ready(); tg.expand(); }
+    await checkAccess();
 });
 
-async function checkAdminAccess() {
-    // Check config
+async function checkAccess() {
     if (!isConfigured()) {
-        showError();
+        document.getElementById('loading').textContent = '⚠️ BIN_ID not set!';
         return;
     }
     
-    // Get Telegram user
-    const userId = tg?.initDataUnsafe?.user?.id?.toString();
+    const uid = tg?.initDataUnsafe?.user?.id?.toString();
     
-    if (!userId) {
-        // Test mode - allow access for testing
-        console.warn('No Telegram user, running in test mode');
+    if (!uid) {
+        // Test mode
         isAdmin = true;
-        showAdminPanel();
+        showAdmin();
         return;
     }
     
-    // Check if admin
-    if (userId === CONFIG.ADMIN_TELEGRAM_ID) {
+    if (uid === CONFIG.ADMIN_ID) {
         isAdmin = true;
-        showAdminPanel();
+        showAdmin();
     } else {
-        showError();
+        document.getElementById('loading').classList.add('hidden');
+        document.getElementById('denied').classList.remove('hidden');
     }
 }
 
-function showAdminPanel() {
-    document.getElementById('loadingScreen').classList.add('hidden');
-    document.getElementById('errorScreen').classList.add('hidden');
-    document.getElementById('adminPanel').classList.remove('hidden');
-    document.getElementById('refreshFab').classList.remove('hidden');
-    
-    loadDashboard();
+function showAdmin() {
+    document.getElementById('loading').classList.add('hidden');
+    document.getElementById('admin').classList.remove('hidden');
+    loadAll();
 }
 
-function showError() {
-    document.getElementById('loadingScreen').classList.add('hidden');
-    document.getElementById('adminPanel').classList.add('hidden');
-    document.getElementById('errorScreen').classList.remove('hidden');
-}
-
-// ===== Load Dashboard =====
-
-async function loadDashboard() {
-    try {
-        await Promise.all([
-            loadStats(),
-            loadConfig(),
-            loadWithdrawals(),
-            loadUsers(),
-            loadSettings()
-        ]);
-    } catch (error) {
-        console.error('Dashboard load error:', error);
-        showToast('Failed to load data', 'error');
-    }
+async function loadAll() {
+    await Promise.all([loadStats(), loadConfig(), loadWd(), loadUsers(), loadSettings()]);
 }
 
 async function loadStats() {
     try {
-        const dbData = await db.fetch(true);
-        const users = dbData.users || {};
-        const stats = dbData.stats || {};
+        const data = await db.fetch(true);
+        const users = data.users || {};
+        const stats = data.stats || {};
+        const total = Object.values(users).reduce((s, u) => s + (u.balance || 0), 0);
         
-        const userCount = Object.keys(users).length;
-        const totalBalance = Object.values(users).reduce((sum, u) => sum + (u.balance || 0), 0);
-        
-        document.getElementById('statUsers').textContent = userCount;
-        document.getElementById('statGames').textContent = stats.totalGames || 0;
-        document.getElementById('statWagered').textContent = (stats.totalWagered || 0).toFixed(1);
-        document.getElementById('statBalance').textContent = totalBalance.toFixed(2);
-    } catch (e) {
-        console.error('Stats error:', e);
-    }
+        document.getElementById('sUsers').textContent = Object.keys(users).length;
+        document.getElementById('sGames').textContent = stats.totalGames || 0;
+        document.getElementById('sWagered').textContent = (stats.totalWagered || 0).toFixed(1);
+        document.getElementById('sBalance').textContent = total.toFixed(2);
+    } catch (e) { console.error(e); }
 }
 
 async function loadConfig() {
-    try {
-        const settings = await db.getSettings();
-        
-        document.getElementById('configBinId').textContent = CONFIG.JSONBIN_BIN_ID || '-';
-        document.getElementById('configAdminId').textContent = settings.adminId || CONFIG.ADMIN_TELEGRAM_ID;
-        document.getElementById('configWallet').textContent = (settings.tonWallet || CONFIG.TON_WALLET).slice(0, 20) + '...';
-    } catch (e) {
-        console.error('Config error:', e);
-    }
+    document.getElementById('cfgBin').textContent = CONFIG.JSONBIN_BIN_ID || 'NOT SET!';
+    document.getElementById('cfgAdmin').textContent = CONFIG.ADMIN_ID;
+    document.getElementById('cfgWallet').textContent = CONFIG.TON_WALLET.slice(0, 15) + '...';
 }
 
-async function loadWithdrawals() {
+async function loadWd() {
     try {
-        const withdrawals = await db.getPendingWithdrawals();
-        const container = document.getElementById('withdrawalsList');
-        const badge = document.getElementById('wdBadge');
+        const list = await db.getPendingWithdrawals();
+        const el = document.getElementById('wdList');
+        document.getElementById('wdBadge').textContent = list.length;
         
-        badge.textContent = withdrawals.length;
-        badge.style.display = withdrawals.length > 0 ? 'inline' : 'none';
+        if (!list.length) { el.innerHTML = '<div class="empty">No pending</div>'; return; }
         
-        if (withdrawals.length === 0) {
-            container.innerHTML = `
-                <div class="empty-state">
-                    <div class="empty-icon">✅</div>
-                    <p>No pending withdrawals</p>
-                </div>
-            `;
-            return;
-        }
-        
-        container.innerHTML = withdrawals.map(w => `
-            <div class="withdrawal-item">
-                <div class="wd-header">
+        el.innerHTML = list.map(w => `
+            <div class="wd-item">
+                <div class="wd-head">
                     <span class="wd-user">${w.username || 'User'}</span>
                     <span class="wd-amount">${w.amount} TON</span>
                 </div>
-                <div class="wd-info">
-                    ID: ${w.oderId} | ${new Date(w.createdAt).toLocaleString()}
-                </div>
-                <div class="wd-address">${w.walletAddress}</div>
+                <div class="wd-info">ID: ${w.oderId} | ${new Date(w.createdAt).toLocaleString()}</div>
+                <div class="wd-addr">${w.address}</div>
                 <div class="wd-actions">
-                    <button class="btn btn-success btn-flex btn-sm" onclick="processWd('${w.id}', true)">
-                        ✓ Approve
-                    </button>
-                    <button class="btn btn-danger btn-flex btn-sm" onclick="processWd('${w.id}', false)">
-                        ✗ Reject
-                    </button>
+                    <button class="btn btn-success" onclick="processWd('${w.id}',true)">✓</button>
+                    <button class="btn btn-danger" onclick="processWd('${w.id}',false)">✗</button>
                 </div>
             </div>
         `).join('');
-    } catch (e) {
-        console.error('Withdrawals error:', e);
-    }
+    } catch (e) { console.error(e); }
+}
+
+async function processWd(id, ok) {
+    if (!confirm(ok ? 'Approve?' : 'Reject?')) return;
+    try {
+        const r = await db.processWithdraw(id, ok);
+        toast(ok ? 'Approved!' : 'Rejected!', ok ? 'success' : 'info');
+        if (ok) toast('Send ' + r.amount + ' TON to: ' + r.address, 'info');
+        loadWd();
+        loadStats();
+    } catch (e) { toast(e.message, 'error'); }
 }
 
 async function loadUsers() {
     try {
         allUsers = await db.getAllUsers();
-        const container = document.getElementById('usersList');
+        const el = document.getElementById('usersList');
+        const list = Object.entries(allUsers);
         
-        const userList = Object.entries(allUsers);
+        if (!list.length) { el.innerHTML = '<div class="empty">No users</div>'; return; }
         
-        if (userList.length === 0) {
-            container.innerHTML = `
-                <div class="empty-state">
-                    <div class="empty-icon">👥</div>
-                    <p>No users yet</p>
-                </div>
-            `;
-            return;
-        }
+        list.sort((a, b) => (b[1].balance || 0) - (a[1].balance || 0));
         
-        // Sort by balance
-        userList.sort((a, b) => (b[1].balance || 0) - (a[1].balance || 0));
-        
-        container.innerHTML = userList.slice(0, 50).map(([id, user]) => `
+        el.innerHTML = list.slice(0, 50).map(([id, u]) => `
             <div class="user-item" onclick="selectUser('${id}')">
-                <div class="user-info">
-                    <span class="user-name">${user.odername || user.firstName || 'Unknown'}</span>
-                    <span class="user-id">ID: ${id}</span>
-                </div>
-                <span class="user-balance">${(user.balance || 0).toFixed(2)} TON</span>
+                <div><div class="user-name">${u.odername || 'Unknown'}</div><div class="user-id">ID: ${id}</div></div>
+                <div class="user-bal">${(u.balance || 0).toFixed(2)} TON</div>
             </div>
         `).join('');
-    } catch (e) {
-        console.error('Users error:', e);
-    }
+    } catch (e) { console.error(e); }
 }
-
-async function loadSettings() {
-    try {
-        const settings = await db.getSettings();
-        
-        document.getElementById('settingMinBet').value = settings.minBet || 0.1;
-        document.getElementById('settingMaxBet').value = settings.maxBet || 100;
-        document.getElementById('settingMinWithdraw').value = settings.minWithdraw || 1;
-        document.getElementById('settingHouseEdge').value = ((settings.houseEdge || 0.03) * 100).toFixed(1);
-    } catch (e) {
-        console.error('Settings error:', e);
-    }
-}
-
-// ===== User Management =====
 
 async function searchUser() {
-    const searchId = document.getElementById('userSearchInput').value.trim();
-    const container = document.getElementById('userSearchResult');
-    
-    if (!searchId) {
-        container.innerHTML = '';
-        return;
-    }
+    const id = document.getElementById('searchInput').value.trim();
+    const el = document.getElementById('searchResult');
+    if (!id) { el.innerHTML = ''; return; }
     
     try {
-        const user = await db.getUser(searchId);
-        
-        if (!user) {
-            container.innerHTML = `
-                <div class="empty-state" style="padding: 16px;">
-                    <p>User not found</p>
-                </div>
-            `;
-            return;
-        }
-        
-        showUserDetail(searchId, user, container);
-    } catch (e) {
-        console.error('Search error:', e);
-        container.innerHTML = '<p style="color: var(--danger); padding: 16px;">Error searching user</p>';
-    }
+        const u = await db.getUser(id);
+        if (!u) { el.innerHTML = '<div class="empty">Not found</div>'; return; }
+        showUserDetail(id, u, el);
+    } catch (e) { el.innerHTML = '<div class="empty">Error</div>'; }
 }
 
-function selectUser(userId) {
-    const user = allUsers[userId];
-    if (!user) return;
-    
-    document.getElementById('userSearchInput').value = userId;
-    showUserDetail(userId, user, document.getElementById('userSearchResult'));
+function selectUser(id) {
+    const u = allUsers[id];
+    if (!u) return;
+    document.getElementById('searchInput').value = id;
+    showUserDetail(id, u, document.getElementById('searchResult'));
 }
 
-function showUserDetail(userId, user, container) {
-    selectedUser = { id: userId, ...user };
-    
-    const winRate = user.gamesPlayed > 0 
-        ? ((user.wins / user.gamesPlayed) * 100).toFixed(1) 
-        : 0;
-    
-    container.innerHTML = `
-        <div class="user-detail">
-            <div class="user-detail-header">
-                <div>
-                    <div class="user-name" style="font-size: 16px;">${user.odername || user.firstName || 'Unknown'}</div>
-                    <div class="user-id">ID: ${userId}</div>
-                </div>
-                <div class="user-balance" style="font-size: 18px;">${(user.balance || 0).toFixed(2)} TON</div>
+function showUserDetail(id, u, el) {
+    el.innerHTML = `
+        <div style="background:var(--bg);padding:14px;border-radius:10px;margin-bottom:12px;">
+            <div style="display:flex;justify-content:space-between;margin-bottom:10px;">
+                <div><div class="user-name">${u.odername || 'Unknown'}</div><div class="user-id">ID: ${id}</div></div>
+                <div class="user-bal">${(u.balance || 0).toFixed(2)} TON</div>
             </div>
-            
-            <div class="user-stats">
-                <div class="user-stat">
-                    <div class="user-stat-value">${user.gamesPlayed || 0}</div>
-                    <div class="user-stat-label">Games</div>
-                </div>
-                <div class="user-stat">
-                    <div class="user-stat-value">${user.wins || 0}</div>
-                    <div class="user-stat-label">Wins</div>
-                </div>
-                <div class="user-stat">
-                    <div class="user-stat-value">${winRate}%</div>
-                    <div class="user-stat-label">Win Rate</div>
-                </div>
+            <div style="font-size:12px;color:var(--text2);margin-bottom:10px;">
+                Games: ${u.gamesPlayed || 0} | Wins: ${u.wins || 0} | Wagered: ${(u.totalWagered || 0).toFixed(2)}
             </div>
-            
-            <div class="balance-editor">
-                <input type="number" id="newBalanceInput" value="${user.balance || 0}" step="0.01" placeholder="New balance">
-                <button class="btn btn-success btn-sm" onclick="updateUserBalance('${userId}')">Set</button>
-            </div>
-            
-            <div style="margin-top: 12px; font-size: 12px; color: var(--text-muted);">
-                Wagered: ${(user.totalWagered || 0).toFixed(2)} TON | 
-                Biggest Win: ${(user.biggestWin || 0).toFixed(2)} TON |
-                Joined: ${new Date(user.createdAt).toLocaleDateString()}
+            <div class="balance-edit">
+                <input type="number" id="newBal" value="${u.balance || 0}" step="0.01">
+                <button onclick="setBal('${id}')">Set</button>
             </div>
         </div>
     `;
 }
 
-async function updateUserBalance(userId) {
-    const newBalance = parseFloat(document.getElementById('newBalanceInput').value);
-    
-    if (isNaN(newBalance) || newBalance < 0) {
-        showToast('Invalid balance', 'error');
-        return;
-    }
-    
+async function setBal(id) {
+    const v = parseFloat(document.getElementById('newBal').value);
+    if (isNaN(v) || v < 0) { toast('Invalid', 'error'); return; }
     try {
-        await db.setUserBalance(userId, newBalance);
-        showToast('Balance updated!', 'success');
-        
-        // Refresh
-        await loadUsers();
-        await loadStats();
-        
-        // Re-search to show updated
+        await db.setBalance(id, v);
+        toast('Updated!', 'success');
+        loadUsers();
+        loadStats();
         searchUser();
-    } catch (e) {
-        showToast('Error: ' + e.message, 'error');
-    }
+    } catch (e) { toast(e.message, 'error'); }
 }
 
-// ===== Withdrawal Processing =====
-
-async function processWd(id, approved) {
-    const action = approved ? 'approve' : 'reject';
-    
-    if (!confirm(`Are you sure you want to ${action} this withdrawal?`)) {
-        return;
-    }
-    
-    try {
-        const result = await db.processWithdrawal(id, approved);
-        
-        showToast(`Withdrawal ${approved ? 'approved' : 'rejected'}!`, approved ? 'success' : 'info');
-        
-        if (approved) {
-            showToast(`Send ${result.amount} TON to: ${result.walletAddress}`, 'info');
-        }
-        
-        await loadWithdrawals();
-        await loadStats();
-    } catch (e) {
-        showToast('Error: ' + e.message, 'error');
-    }
+async function loadSettings() {
+    document.getElementById('setMinBet').value = CONFIG.MIN_BET;
+    document.getElementById('setMaxBet').value = CONFIG.MAX_BET;
+    document.getElementById('setMinWd').value = CONFIG.MIN_WITHDRAW;
+    document.getElementById('setEdge').value = CONFIG.HOUSE_EDGE * 100;
 }
 
-// ===== Game Controls =====
+async function saveSettings() {
+    toast('Settings are hardcoded in api.js', 'info');
+}
 
-async function forceNewGame() {
-    if (!confirm('Start a new game round?')) return;
-    
+async function newGame() {
+    if (!confirm('Start new game?')) return;
     try {
-        await db.startNewGame();
-        showToast('New game started!', 'success');
-    } catch (e) {
-        showToast('Error: ' + e.message, 'error');
-    }
+        await db.newGame();
+        toast('Started!', 'success');
+    } catch (e) { toast(e.message, 'error'); }
 }
 
 async function forceCrash() {
-    const point = prompt('Enter crash point (e.g., 1.5):');
-    if (!point) return;
-    
-    const crashPoint = parseFloat(point);
-    if (isNaN(crashPoint) || crashPoint < 1) {
-        showToast('Invalid crash point', 'error');
-        return;
-    }
-    
+    const p = prompt('Crash point:');
+    if (!p) return;
+    const v = parseFloat(p);
+    if (isNaN(v) || v < 1) { toast('Invalid', 'error'); return; }
     try {
-        await db.endGame(crashPoint);
-        showToast(`Game crashed at ${crashPoint}x!`, 'success');
-        await loadStats();
-    } catch (e) {
-        showToast('Error: ' + e.message, 'error');
-    }
+        await db.endGame(v);
+        toast('Crashed at ' + v + 'x!', 'success');
+        loadStats();
+    } catch (e) { toast(e.message, 'error'); }
 }
 
-async function setNextCrash() {
-    const point = parseFloat(document.getElementById('nextCrashInput').value);
-    
-    if (isNaN(point) || point < 1) {
-        showToast('Invalid crash point (min 1.00)', 'error');
-        return;
-    }
-    
+async function setCrash() {
+    const v = parseFloat(document.getElementById('crashInput').value);
+    if (isNaN(v) || v < 1) { toast('Invalid', 'error'); return; }
     try {
-        const dbData = await db.fetch(true);
-        dbData.gameState = dbData.gameState || {};
-        dbData.gameState.crashPoint = point;
-        await db.update(dbData);
-        
-        showToast(`Next crash set to ${point}x`, 'success');
-        document.getElementById('nextCrashInput').value = '';
-    } catch (e) {
-        showToast('Error: ' + e.message, 'error');
-    }
+        const data = await db.fetch(true);
+        data.gameState = data.gameState || {};
+        data.gameState.crashPoint = v;
+        await db.save(data);
+        toast('Next crash: ' + v + 'x', 'success');
+        document.getElementById('crashInput').value = '';
+    } catch (e) { toast(e.message, 'error'); }
 }
 
-// ===== Settings =====
-
-async function saveSettings() {
-    try {
-        const settings = {
-            minBet: parseFloat(document.getElementById('settingMinBet').value) || 0.1,
-            maxBet: parseFloat(document.getElementById('settingMaxBet').value) || 100,
-            minWithdraw: parseFloat(document.getElementById('settingMinWithdraw').value) || 1,
-            houseEdge: (parseFloat(document.getElementById('settingHouseEdge').value) || 3) / 100
-        };
-        
-        await db.updateSettings(settings);
-        showToast('Settings saved!', 'success');
-    } catch (e) {
-        showToast('Error: ' + e.message, 'error');
-    }
-}
-
-// ===== UI Helpers =====
-
-function toggleSection(section) {
-    const content = document.getElementById(section + 'Content');
-    const arrow = document.getElementById(section + 'Arrow');
-    
-    if (content.classList.contains('collapsed')) {
-        content.classList.remove('collapsed');
-        arrow.textContent = '▲';
-    } else {
-        content.classList.add('collapsed');
-        arrow.textContent = '▼';
-    }
-}
-
-async function refreshAll() {
-    showToast('Refreshing...', 'info');
-    await loadDashboard();
-    showToast('Data refreshed!', 'success');
+function toggle(s) {
+    const b = document.getElementById(s + 'B');
+    const a = document.getElementById(s + 'A');
+    b.classList.toggle('collapsed');
+    a.textContent = b.classList.contains('collapsed') ? '▼' : '▲';
 }
 
 function goBack() {
-    if (tg) {
-        tg.close();
-    } else {
-        window.location.href = 'index.html';
-    }
+    if (tg) tg.close();
+    else window.location.href = 'index.html';
 }
 
-function showToast(message, type = 'info') {
-    const container = document.getElementById('toastContainer');
-    
-    const toast = document.createElement('div');
-    toast.className = `toast ${type}`;
-    toast.textContent = message;
-    
-    container.appendChild(toast);
-    
-    setTimeout(() => toast.remove(), 3000);
+function toast(m, t = 'info') {
+    const c = document.getElementById('toasts');
+    const e = document.createElement('div');
+    e.className = 'toast ' + t;
+    e.textContent = m;
+    c.appendChild(e);
+    setTimeout(() => e.remove(), 3000);
 }
 
-// Auto refresh
-setInterval(() => {
-    if (isAdmin) {
-        loadWithdrawals();
-        loadStats();
-    }
-}, 30000);
+setInterval(() => { if (isAdmin) { loadWd(); loadStats(); } }, 30000);
