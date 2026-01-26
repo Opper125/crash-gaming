@@ -17,17 +17,7 @@
             <div class="splash-loader">
                 <div class="loader-bar"></div>
             </div>
-            <div class="splash-text">Connecting to Telegram...</div>
-        </div>
-    </div>
-
-    <!-- Error Screen -->
-    <div id="errorScreen" class="error-screen hidden">
-        <div class="error-content">
-            <div class="error-icon">⚠️</div>
-            <div class="error-title">Connection Error</div>
-            <div class="error-message" id="errorMessage">Please open this app from Telegram</div>
-            <button class="error-btn" onclick="location.reload()">Try Again</button>
+            <div class="splash-text" id="splashText">Loading...</div>
         </div>
     </div>
 
@@ -36,16 +26,10 @@
         <!-- Header -->
         <header class="app-header">
             <div class="header-left">
-                <div class="user-avatar" id="userAvatar">
-                    <img src="" alt="" id="userAvatarImg">
-                    <span id="userAvatarText">?</span>
-                </div>
+                <div class="user-avatar" id="userAvatar">?</div>
                 <div class="user-info">
-                    <div class="user-name" id="userName">Loading...</div>
-                    <div class="user-level">
-                        <span class="level-badge">🎮</span>
-                        <span id="userGames">0 games</span>
-                    </div>
+                    <div class="user-name" id="userName">Player</div>
+                    <div class="user-level" id="userGames">0 games</div>
                 </div>
             </div>
             <div class="header-right">
@@ -60,26 +44,24 @@
             </div>
         </header>
 
-        <!-- Game History Ticker -->
+        <!-- History Ticker -->
         <div class="history-ticker">
             <div class="ticker-label">Recent:</div>
             <div class="ticker-items" id="historyTicker">
-                <span class="ticker-item high">--</span>
+                <span class="ticker-item medium">--</span>
             </div>
         </div>
 
-        <!-- Game Canvas Area -->
+        <!-- Game Area -->
         <div class="game-area">
             <div class="game-canvas-wrapper">
                 <canvas id="gameCanvas"></canvas>
                 
-                <!-- Multiplier Overlay -->
                 <div class="multiplier-container">
-                    <div class="multiplier-value" id="multiplierDisplay">1.00<span class="multiplier-x">x</span></div>
-                    <div class="multiplier-status" id="gameStatusText">Waiting for players...</div>
+                    <div class="multiplier-value" id="multiplierDisplay">1.00<span class="x">x</span></div>
+                    <div class="multiplier-status" id="gameStatusText">Waiting...</div>
                 </div>
 
-                <!-- Countdown Overlay -->
                 <div class="overlay-countdown hidden" id="countdownOverlay">
                     <div class="countdown-content">
                         <div class="countdown-label">Starting in</div>
@@ -88,7 +70,6 @@
                     </div>
                 </div>
 
-                <!-- Crash Overlay -->
                 <div class="overlay-crash hidden" id="crashOverlay">
                     <div class="crash-content">
                         <div class="crash-icon">💥</div>
@@ -97,7 +78,6 @@
                     </div>
                 </div>
 
-                <!-- Win Overlay -->
                 <div class="overlay-win hidden" id="winOverlay">
                     <div class="win-content">
                         <div class="win-icon">🎉</div>
@@ -150,36 +130,28 @@
             </button>
         </div>
 
-        <!-- Live Bets Section -->
+        <!-- Live Bets -->
         <div class="live-bets-section">
             <div class="section-tabs">
                 <button class="section-tab active" onclick="switchBetTab('live')">
-                    <span class="tab-icon">👥</span>
-                    <span>Live Bets</span>
+                    <span>👥</span> Live Bets
                     <span class="tab-count" id="liveBetsCount">0</span>
                 </button>
                 <button class="section-tab" onclick="switchBetTab('my')">
-                    <span class="tab-icon">📊</span>
-                    <span>My Bets</span>
+                    <span>📊</span> My Bets
                 </button>
             </div>
             <div class="bets-container">
                 <div class="bets-list" id="liveBetsList">
-                    <div class="empty-bets">
-                        <span class="empty-icon">🎲</span>
-                        <span>No bets yet this round</span>
-                    </div>
+                    <div class="empty-bets">🎲 No bets yet</div>
                 </div>
                 <div class="bets-list hidden" id="myBetsList">
-                    <div class="empty-bets">
-                        <span class="empty-icon">📋</span>
-                        <span>Your bet history will appear here</span>
-                    </div>
+                    <div class="empty-bets">📋 Your bets will appear here</div>
                 </div>
             </div>
         </div>
 
-        <!-- Bottom Navigation -->
+        <!-- Bottom Nav -->
         <nav class="bottom-nav">
             <button class="nav-item active" onclick="switchPage('game')">
                 <span class="nav-icon">🎮</span>
@@ -200,9 +172,7 @@
         </nav>
 
         <!-- Admin FAB -->
-        <button class="admin-fab hidden" id="adminFab" onclick="openAdminPanel()">
-            <span>⚙️</span>
-        </button>
+        <button class="admin-fab hidden" id="adminFab" onclick="openAdmin()">⚙️</button>
     </div>
 
     <!-- Wallet Modal -->
@@ -215,156 +185,74 @@
                 <button class="modal-close" onclick="closeModal('walletModal')">✕</button>
             </div>
             <div class="modal-content">
-                <!-- Balance Card -->
                 <div class="wallet-balance-card">
-                    <div class="balance-card-bg"></div>
-                    <div class="balance-card-content">
-                        <div class="balance-card-label">Available Balance</div>
-                        <div class="balance-card-value" id="walletBalanceValue">0.00 TON</div>
-                        <div class="balance-card-usd" id="walletBalanceUsd">≈ $0.00 USD</div>
-                    </div>
+                    <div class="balance-card-label">Available Balance</div>
+                    <div class="balance-card-value" id="walletBalanceValue">0.00 TON</div>
                 </div>
 
-                <!-- Action Buttons -->
                 <div class="wallet-actions">
-                    <button class="wallet-action-btn deposit" onclick="showDepositSection()">
-                        <span class="action-icon">📥</span>
-                        <span class="action-label">Deposit</span>
+                    <button class="wallet-action-btn deposit" onclick="showSection('deposit')">
+                        <span>📥</span> Deposit
                     </button>
-                    <button class="wallet-action-btn withdraw" onclick="showWithdrawSection()">
-                        <span class="action-icon">📤</span>
-                        <span class="action-label">Withdraw</span>
+                    <button class="wallet-action-btn withdraw" onclick="showSection('withdraw')">
+                        <span>📤</span> Withdraw
                     </button>
-                    <button class="wallet-action-btn gift" onclick="showGiftSection()">
-                        <span class="action-icon">🎁</span>
-                        <span class="action-label">Sell Gift</span>
+                    <button class="wallet-action-btn gift" onclick="showSection('gift')">
+                        <span>🎁</span> Gift
                     </button>
                 </div>
 
-                <!-- Deposit Section -->
+                <!-- Deposit -->
                 <div class="wallet-section" id="depositSection">
                     <h3>📥 Deposit TON</h3>
-                    <p class="section-desc">Send TON to this address to add funds</p>
-                    
-                    <div class="deposit-address-box">
-                        <div class="address-qr">
-                            <div class="qr-placeholder">📱</div>
+                    <div class="deposit-box">
+                        <p>Send TON to:</p>
+                        <div class="address-box">
+                            <code id="depositAddress">UQCVA9Y95Rh59Nz_kSjbxCCNogCsL5oog2dhQKrGvoKxHfdn</code>
+                            <button onclick="copyAddress()">📋</button>
                         </div>
-                        <div class="address-text">
-                            <code id="depositAddressText">UQCVA9Y95Rh59Nz_kSjbxCCNogCsL5oog2dhQKrGvoKxHfdn</code>
-                        </div>
-                        <button class="copy-address-btn" onclick="copyDepositAddress()">
-                            <span>📋</span> Copy
-                        </button>
-                    </div>
-
-                    <div class="deposit-memo">
-                        <label>Your Deposit Memo (Required!):</label>
-                        <div class="memo-box">
-                            <code id="depositMemo">Loading...</code>
+                        <p class="memo-label">Memo (Required!):</p>
+                        <div class="address-box">
+                            <code id="depositMemo">-</code>
                             <button onclick="copyMemo()">📋</button>
                         </div>
-                    </div>
-
-                    <div class="deposit-notes">
-                        <div class="note-item">
-                            <span class="note-icon">⚡</span>
-                            <span>Minimum deposit: 0.1 TON</span>
-                        </div>
-                        <div class="note-item">
-                            <span class="note-icon">⏱️</span>
-                            <span>Processing time: 1-5 minutes</span>
-                        </div>
-                        <div class="note-item warning">
-                            <span class="note-icon">⚠️</span>
-                            <span>Always include memo or funds may be lost!</span>
+                        <div class="notes">
+                            <p>⚡ Min: 0.1 TON</p>
+                            <p>⏱️ Processing: 1-5 min</p>
+                            <p class="warning">⚠️ Include memo!</p>
                         </div>
                     </div>
                 </div>
 
-                <!-- Withdraw Section -->
+                <!-- Withdraw -->
                 <div class="wallet-section hidden" id="withdrawSection">
-                    <h3>📤 Withdraw TON</h3>
-                    <p class="section-desc">Withdraw your balance to TON wallet</p>
-
+                    <h3>📤 Withdraw</h3>
                     <div class="form-group">
                         <label>Amount (Min: 1 TON)</label>
-                        <div class="input-with-max">
-                            <input type="number" id="withdrawAmountInput" placeholder="0.00" min="1" step="0.1">
-                            <button class="max-btn" onclick="setWithdrawMax()">MAX</button>
-                        </div>
+                        <input type="number" id="withdrawAmount" placeholder="0.00" min="1" step="0.1">
                     </div>
-
                     <div class="form-group">
-                        <label>Your TON Wallet Address</label>
-                        <input type="text" id="withdrawAddressInput" placeholder="EQ... or UQ...">
+                        <label>Your TON Address</label>
+                        <input type="text" id="withdrawAddress" placeholder="EQ... or UQ...">
                     </div>
-
-                    <button class="submit-withdraw-btn" onclick="submitWithdraw()">
-                        <span>📤</span> Request Withdrawal
-                    </button>
-
-                    <div class="withdraw-notes">
-                        <div class="note-item">
-                            <span class="note-icon">⏱️</span>
-                            <span>Processing: 1-24 hours</span>
-                        </div>
-                        <div class="note-item">
-                            <span class="note-icon">💰</span>
-                            <span>Network fee: ~0.05 TON</span>
-                        </div>
-                    </div>
+                    <button class="submit-btn" onclick="submitWithdraw()">📤 Request</button>
                 </div>
 
-                <!-- Gift Section -->
+                <!-- Gift -->
                 <div class="wallet-section hidden" id="giftSection">
-                    <h3>🎁 Sell Telegram Gift</h3>
-                    <p class="section-desc">Convert your Telegram gifts to TON balance</p>
-
-                    <div class="gift-info-card">
-                        <div class="gift-icon">🎁</div>
-                        <div class="gift-text">
-                            <p>To sell a gift:</p>
-                            <ol>
-                                <li>Go to your Telegram profile</li>
-                                <li>Select a gift you want to sell</li>
-                                <li>Transfer it to: <strong>@YourBotUsername</strong></li>
-                                <li>Your balance will be credited automatically!</li>
-                            </ol>
-                        </div>
-                    </div>
-
-                    <div class="gift-rates">
-                        <h4>Current Gift Rates:</h4>
-                        <div class="rate-list">
-                            <div class="rate-item">
-                                <span>🎈 Basic Gift</span>
-                                <span>~0.5 TON</span>
-                            </div>
-                            <div class="rate-item">
-                                <span>⭐ Premium Gift</span>
-                                <span>~2.0 TON</span>
-                            </div>
-                            <div class="rate-item">
-                                <span>💎 Rare Gift</span>
-                                <span>~5.0 TON</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="gift-note">
-                        <span class="note-icon">ℹ️</span>
-                        <span>Gift values are based on current market rates</span>
+                    <h3>🎁 Sell Gift</h3>
+                    <div class="gift-info">
+                        <p>Transfer your Telegram gift to:</p>
+                        <p class="bot-name">@crash_gambaimbot</p>
+                        <p>Balance will be credited automatically!</p>
                     </div>
                 </div>
 
-                <!-- Transaction History -->
+                <!-- Transactions -->
                 <div class="transactions-section">
-                    <h3>📜 Transaction History</h3>
-                    <div class="transactions-list" id="transactionsList">
-                        <div class="empty-transactions">
-                            <span>No transactions yet</span>
-                        </div>
+                    <h3>📜 Transactions</h3>
+                    <div id="transactionsList">
+                        <div class="empty-tx">No transactions</div>
                     </div>
                 </div>
             </div>
@@ -377,53 +265,35 @@
         <div class="modal-sheet">
             <div class="modal-handle"></div>
             <div class="modal-header">
-                <h2>📊 Statistics</h2>
+                <h2>📊 Stats</h2>
                 <button class="modal-close" onclick="closeModal('statsModal')">✕</button>
             </div>
             <div class="modal-content">
                 <div class="stats-grid">
                     <div class="stat-card">
-                        <div class="stat-icon">🎮</div>
-                        <div class="stat-value" id="statTotalGames">0</div>
-                        <div class="stat-label">Games Played</div>
+                        <div class="stat-value" id="statGames">0</div>
+                        <div class="stat-label">Games</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-icon">✅</div>
                         <div class="stat-value" id="statWins">0</div>
                         <div class="stat-label">Wins</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-icon">❌</div>
                         <div class="stat-value" id="statLosses">0</div>
                         <div class="stat-label">Losses</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-icon">📈</div>
                         <div class="stat-value" id="statWinRate">0%</div>
                         <div class="stat-label">Win Rate</div>
                     </div>
-                    <div class="stat-card highlight">
-                        <div class="stat-icon">💰</div>
-                        <div class="stat-value" id="statTotalWagered">0.00</div>
-                        <div class="stat-label">Total Wagered</div>
-                    </div>
-                    <div class="stat-card highlight">
-                        <div class="stat-icon">🏆</div>
-                        <div class="stat-value" id="statBiggestWin">0.00</div>
-                        <div class="stat-label">Biggest Win</div>
-                    </div>
                 </div>
-
                 <div class="profit-card">
-                    <div class="profit-label">Net Profit/Loss</div>
-                    <div class="profit-value" id="statNetProfit">0.00 TON</div>
+                    <div class="profit-label">Net Profit</div>
+                    <div class="profit-value" id="statProfit">0.00 TON</div>
                 </div>
-
-                <div class="bet-history-section">
-                    <h3>Recent Bets</h3>
-                    <div class="bet-history-list" id="betHistoryList">
-                        <div class="empty-history">No bet history</div>
-                    </div>
+                <h3 style="margin: 20px 0 10px;">Recent Bets</h3>
+                <div id="betHistoryList" class="history-list">
+                    <div class="empty-tx">No history</div>
                 </div>
             </div>
         </div>
@@ -440,59 +310,35 @@
             </div>
             <div class="modal-content">
                 <div class="profile-card">
-                    <div class="profile-avatar-large" id="profileAvatarLarge">
-                        <img src="" alt="" id="profileAvatarImg">
-                        <span id="profileAvatarText">?</span>
-                    </div>
+                    <div class="profile-avatar" id="profileAvatar">?</div>
                     <div class="profile-name" id="profileName">Player</div>
-                    <div class="profile-username" id="profileUsername">@username</div>
-                    <div class="profile-id">
-                        <span>Telegram ID:</span>
-                        <code id="profileTelegramId">------</code>
-                    </div>
+                    <div class="profile-id">ID: <span id="profileId">-</span></div>
                 </div>
-
-                <div class="profile-stats-list">
-                    <div class="profile-stat-item">
-                        <span class="stat-icon">📅</span>
-                        <span class="stat-label">Member Since</span>
-                        <span class="stat-value" id="profileJoinDate">---</span>
+                <div class="profile-stats">
+                    <div class="profile-stat">
+                        <span>📅 Joined</span>
+                        <span id="profileJoined">-</span>
                     </div>
-                    <div class="profile-stat-item">
-                        <span class="stat-icon">🎮</span>
-                        <span class="stat-label">Total Games</span>
-                        <span class="stat-value" id="profileTotalGames">0</span>
+                    <div class="profile-stat">
+                        <span>🎮 Games</span>
+                        <span id="profileGames">0</span>
                     </div>
-                    <div class="profile-stat-item">
-                        <span class="stat-icon">💰</span>
-                        <span class="stat-label">Total Wagered</span>
-                        <span class="stat-value" id="profileTotalWagered">0.00 TON</span>
+                    <div class="profile-stat">
+                        <span>💰 Wagered</span>
+                        <span id="profileWagered">0 TON</span>
                     </div>
-                    <div class="profile-stat-item">
-                        <span class="stat-icon">🏆</span>
-                        <span class="stat-label">Biggest Win</span>
-                        <span class="stat-value" id="profileBiggestWin">0.00 TON</span>
+                    <div class="profile-stat">
+                        <span>🏆 Best Win</span>
+                        <span id="profileBestWin">0 TON</span>
                     </div>
-                    <div class="profile-stat-item">
-                        <span class="stat-icon">📊</span>
-                        <span class="stat-label">Win Rate</span>
-                        <span class="stat-value" id="profileWinRate">0%</span>
-                    </div>
-                </div>
-
-                <div class="profile-actions">
-                    <button class="profile-action-btn" onclick="shareProfile()">
-                        <span>📤</span> Share Profile
-                    </button>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Toast Container -->
+    <!-- Toast -->
     <div class="toast-container" id="toastContainer"></div>
 
-    <!-- Scripts -->
     <script src="api.js"></script>
     <script src="game.js"></script>
     <script src="app.js"></script>
