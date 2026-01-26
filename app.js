@@ -1,648 +1,299 @@
-// ===== Main Application =====
-
-// Global state
 window.currentUser = null;
 window.tg = window.Telegram?.WebApp;
 
-// ===== Initialization =====
-
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log('🚀 App starting...');
+    updateSplash('Initializing...');
     
-    // Check configuration
+    // Check config
     if (!isConfigured()) {
-        showError('App not configured. Please complete setup first.');
-        // Redirect to setup after delay
-        setTimeout(() => {
-            window.location.href = 'setup.html';
-        }, 2000);
+        updateSplash('⚠️ BIN_ID not set! Check api.js');
+        console.error('Please set JSONBIN_BIN_ID in api.js');
         return;
     }
     
-    // Initialize Telegram WebApp
-    initTelegram();
-    
-    // Check Telegram context
-    if (!window.tg?.initDataUnsafe?.user) {
-        // Not in Telegram, show error
-        showError('Please open this app from Telegram');
-        return;
+    // Init Telegram
+    if (window.tg) {
+        window.tg.ready();
+        window.tg.expand();
+        window.tg.setHeaderColor('#0f0f1a');
+        window.tg.setBackgroundColor('#0f0f1a');
     }
+    
+    updateSplash('Loading user...');
     
     try {
-        // Load user
         await loadUser();
-        
-        // Initialize game
+        updateSplash('Starting game...');
         await game.init();
-        
-        // Setup event listeners
-        setupEventListeners();
-        
-        // Check admin
-        checkAdmin();
-        
-        // Show main app
-        showMainApp();
-        
-        console.log('✅ App initialized successfully');
-        
-    } catch (error) {
-        console.error('Initialization error:', error);
-        showError('Failed to initialize. Please try again.');
+        showApp();
+        game.startBetting();
+    } catch (e) {
+        console.error('Init error:', e);
+        updateSplash('Error: ' + e.message);
     }
 });
 
-// ===== Telegram Integration =====
-
-function initTelegram() {
-    if (!window.tg) {
-        console.warn('Telegram WebApp not available');
-        return;
-    }
-    
-    // Initialize
-    window.tg.ready();
-    window.tg.expand();
-    
-    // Set theme
-    window.tg.setHeaderColor('#0f0f1a');
-    window.tg.setBackgroundColor('#0f0f1a');
-    
-    // Enable closing confirmation
-    window.tg.enableClosingConfirmation();
-    
-    console.log('📱 Telegram WebApp initialized');
-}
-
-// ===== User Management =====
+function updateSplash(t) { document.getElementById('splashText').textContent = t; }
 
 async function loadUser() {
-    const tgUser = window.tg?.initDataUnsafe?.user;
+    let userData = {};
     
-    if (!tgUser) {
-        throw new Error('No Telegram user data');
+    if (window.tg?.initDataUnsafe?.user) {
+        const u = window.tg.initDataUnsafe.user;
+        userData = {
+            oderId: u.id.toString(),
+            firstName: u.first_name || 'Player',
+            username: u.username || ''
+        };
+    } else {
+        // Test mode
+        userData = {
+            oderId: 'test_' + Date.now(),
+            firstName: 'TestPlayer',
+            username: 'test'
+        };
+        console.warn('Running in test mode');
     }
     
-    const userData = {
-        oderId: tgUser.id.toString(),
-        username: tgUser.first_name || 'Player',
-        firstName: tgUser.first_name || '',
-        lastName: tgUser.last_name || '',
-        telegramUsername: tgUser.username || '',
-        photoUrl: tgUser.photo_url || ''
-    };
-    
-    // Create or get user from database
     const user = await db.createUser(userData.oderId, userData);
-    
     window.currentUser = user;
-    
-    // Update UI
-    updateUserDisplay();
-    updateBalanceDisplay();
-    
-    console.log('👤 User loaded:', user.odername);
+    updateUserUI();
+    updateBalance();
+    checkAdmin();
 }
 
-async function refreshUserData() {
+async function refreshUser() {
     if (!window.currentUser) return;
-    
-    try {
-        const user = await db.getUser(window.currentUser.oderId);
-        if (user) {
-            window.currentUser = user;
-            updateBalanceDisplay();
-        }
-    } catch (e) {
-        console.error('Failed to refresh user:', e);
-    }
+    const u = await db.getUser(window.currentUser.oderId);
+    if (u) { window.currentUser = u; updateBalance(); }
 }
 
-// ===== UI Updates =====
-
-function updateUserDisplay() {
-    const user = window.currentUser;
-    if (!user) return;
-    
-    // Avatar
-    const avatarImg = document.getElementById('userAvatarImg');
-    const avatarText = document.getElementById('userAvatarText');
-    
-    if (user.photoUrl) {
-        avatarImg.src = user.photoUrl;
-        avatarImg.style.display = 'block';
-        avatarText.style.display = 'none';
-    } else {
-        avatarImg.style.display = 'none';
-        avatarText.style.display = 'flex';
-        avatarText.textContent = (user.odername || user.firstName || 'P')[0].toUpperCase();
-    }
-    
-    // Name
-    document.getElementById('userName').textContent = user.odername || user.firstName || 'Player';
-    document.getElementById('userGames').textContent = `${user.gamesPlayed || 0} games`;
-    
-    // Profile modal
-    updateProfileDisplay();
+function updateUserUI() {
+    const u = window.currentUser;
+    if (!u) return;
+    document.getElementById('userAvatar').textContent = (u.odername || 'P')[0].toUpperCase();
+    document.getElementById('userName').textContent = u.odername || 'Player';
+    document.getElementById('userGames').textContent = (u.gamesPlayed || 0) + ' games';
+    document.getElementById('profileAvatar').textContent = (u.odername || 'P')[0].toUpperCase();
+    document.getElementById('profileName').textContent = u.odername || 'Player';
+    document.getElementById('profileId').textContent = u.oderId;
 }
 
-function updateBalanceDisplay() {
-    const balance = window.currentUser?.balance || 0;
-    const balanceText = `${balance.toFixed(2)} TON`;
-    
-    document.getElementById('balanceDisplay').textContent = balanceText;
-    document.getElementById('walletBalanceValue').textContent = balanceText;
-    document.getElementById('walletBalanceUsd').textContent = `≈ $${(balance * CONFIG.TON_PRICE_USD).toFixed(2)} USD`;
-}
-
-function updateProfileDisplay() {
-    const user = window.currentUser;
-    if (!user) return;
-    
-    // Avatar
-    const avatarImg = document.getElementById('profileAvatarImg');
-    const avatarText = document.getElementById('profileAvatarText');
-    
-    if (user.photoUrl) {
-        avatarImg.src = user.photoUrl;
-        avatarImg.style.display = 'block';
-        avatarText.style.display = 'none';
-    } else {
-        avatarImg.style.display = 'none';
-        avatarText.style.display = 'flex';
-        avatarText.textContent = (user.odername || 'P')[0].toUpperCase();
-    }
-    
-    document.getElementById('profileName').textContent = user.odername || user.firstName || 'Player';
-    document.getElementById('profileUsername').textContent = user.username ? `@${user.username}` : '';
-    document.getElementById('profileTelegramId').textContent = user.oderId;
-    document.getElementById('profileJoinDate').textContent = new Date(user.createdAt).toLocaleDateString();
-    document.getElementById('profileTotalGames').textContent = user.gamesPlayed || 0;
-    document.getElementById('profileTotalWagered').textContent = `${(user.totalWagered || 0).toFixed(2)} TON`;
-    document.getElementById('profileBiggestWin').textContent = `${(user.biggestWin || 0).toFixed(2)} TON`;
-    
-    const winRate = user.gamesPlayed > 0 
-        ? ((user.wins / user.gamesPlayed) * 100).toFixed(1) 
-        : '0';
-    document.getElementById('profileWinRate').textContent = `${winRate}%`;
+function updateBalance() {
+    const b = window.currentUser?.balance || 0;
+    document.getElementById('balanceDisplay').textContent = b.toFixed(2) + ' TON';
+    document.getElementById('walletBalanceValue').textContent = b.toFixed(2) + ' TON';
 }
 
 function checkAdmin() {
-    const isAdmin = window.currentUser?.oderId === CONFIG.ADMIN_TELEGRAM_ID;
-    const adminFab = document.getElementById('adminFab');
-    
-    if (isAdmin && adminFab) {
-        adminFab.classList.remove('hidden');
+    if (window.currentUser?.oderId === CONFIG.ADMIN_ID) {
+        document.getElementById('adminFab')?.classList.remove('hidden');
     }
 }
 
-// ===== Screen Management =====
-
-function showMainApp() {
+function showApp() {
     document.getElementById('splashScreen').classList.add('hidden');
-    document.getElementById('errorScreen').classList.add('hidden');
     document.getElementById('mainApp').classList.remove('hidden');
 }
 
-function showError(message) {
-    document.getElementById('splashScreen').classList.add('hidden');
-    document.getElementById('mainApp').classList.add('hidden');
-    document.getElementById('errorMessage').textContent = message;
-    document.getElementById('errorScreen').classList.remove('hidden');
+// Bet controls
+function adjustBet(a) {
+    const i = document.getElementById('betAmountInput');
+    let v = parseFloat(i.value) || 0;
+    v = Math.max(CONFIG.MIN_BET, Math.round((v + a) * 100) / 100);
+    v = Math.min(v, window.currentUser?.balance || 0);
+    i.value = v.toFixed(2);
+    haptic('light');
 }
 
-// ===== Event Listeners =====
-
-function setupEventListeners() {
-    // Bet amount adjustments handled inline
-    
-    // Input validation
-    document.getElementById('betAmountInput')?.addEventListener('input', (e) => {
-        let value = parseFloat(e.target.value);
-        if (isNaN(value)) value = CONFIG.MIN_BET;
-        if (value < 0) value = 0;
-        e.target.value = value;
-    });
-}
-
-// ===== Bet Controls =====
-
-function adjustBet(amount) {
-    const input = document.getElementById('betAmountInput');
-    let value = parseFloat(input.value) || 0;
-    value = Math.max(CONFIG.MIN_BET, Math.round((value + amount) * 100) / 100);
-    value = Math.min(value, window.currentUser?.balance || 0);
-    input.value = value.toFixed(2);
-    hapticFeedback('light');
-}
-
-function setBetAmount(amount) {
-    const input = document.getElementById('betAmountInput');
-    const maxBet = Math.min(amount, window.currentUser?.balance || 0);
-    input.value = maxBet.toFixed(2);
-    hapticFeedback('light');
+function setBetAmount(a) {
+    const i = document.getElementById('betAmountInput');
+    i.value = Math.min(a, window.currentUser?.balance || 0).toFixed(2);
+    haptic('light');
 }
 
 function setBetMax() {
-    const balance = window.currentUser?.balance || 0;
-    const maxBet = Math.min(balance, CONFIG.MAX_BET);
-    document.getElementById('betAmountInput').value = maxBet.toFixed(2);
-    hapticFeedback('light');
+    const b = Math.min(window.currentUser?.balance || 0, CONFIG.MAX_BET);
+    document.getElementById('betAmountInput').value = b.toFixed(2);
+    haptic('light');
 }
 
 async function handleMainButton() {
-    const state = game.getState();
-    
-    if (state.state === 'betting' && !state.myBet) {
-        await placeBet();
-    } else if (state.state === 'running' && state.myBet && !state.myBet.cashedOut) {
-        await cashOut();
-    }
-}
-
-async function placeBet() {
-    const amountInput = document.getElementById('betAmountInput');
-    const amount = parseFloat(amountInput.value);
-    
-    if (isNaN(amount) || amount <= 0) {
-        showToast('Enter a valid bet amount', 'error');
-        return;
-    }
-    
-    // Get auto cashout
-    let autoCashout = null;
-    if (document.getElementById('autoCashoutToggle')?.checked) {
-        autoCashout = parseFloat(document.getElementById('autoCashoutValue').value);
-        if (isNaN(autoCashout) || autoCashout < 1.01) {
-            showToast('Invalid auto cashout value', 'error');
-            return;
+    const s = game.getState();
+    if (s.state === 'betting' && !s.myBet) {
+        const a = parseFloat(document.getElementById('betAmountInput').value);
+        if (isNaN(a) || a <= 0) { showToast('Enter valid amount', 'error'); return; }
+        
+        let auto = null;
+        if (document.getElementById('autoCashoutToggle')?.checked) {
+            auto = parseFloat(document.getElementById('autoCashoutValue').value);
+            if (isNaN(auto) || auto < 1.01) { showToast('Invalid auto cashout', 'error'); return; }
         }
-    }
-    
-    try {
-        await game.placeBet(amount, autoCashout);
-        showToast(`Bet placed: ${amount.toFixed(2)} TON`, 'success');
-    } catch (error) {
-        showToast(error.message, 'error');
-    }
-}
-
-async function cashOut() {
-    try {
-        await game.cashout();
-    } catch (error) {
-        showToast(error.message, 'error');
+        
+        try {
+            await game.placeBet(a, auto);
+            showToast('Bet placed!', 'success');
+        } catch (e) { showToast(e.message, 'error'); }
+    } else if (s.state === 'running' && s.myBet && !s.myBet.cashedOut) {
+        try { await game.cashout(); } catch (e) { showToast(e.message, 'error'); }
     }
 }
 
-// ===== Tab Switching =====
-
-function switchBetTab(tab) {
-    document.querySelectorAll('.section-tab').forEach(t => t.classList.remove('active'));
+// Tabs
+function switchBetTab(t) {
+    document.querySelectorAll('.section-tab').forEach(e => e.classList.remove('active'));
     event.currentTarget.classList.add('active');
-    
-    document.getElementById('liveBetsList').classList.toggle('hidden', tab !== 'live');
-    document.getElementById('myBetsList').classList.toggle('hidden', tab !== 'my');
-    
-    if (tab === 'my') {
-        loadMyBetsHistory();
-    }
-    
-    hapticFeedback('light');
+    document.getElementById('liveBetsList').classList.toggle('hidden', t !== 'live');
+    document.getElementById('myBetsList').classList.toggle('hidden', t !== 'my');
+    if (t === 'my') loadMyBets();
+    haptic('light');
 }
 
-async function loadMyBetsHistory() {
-    const list = document.getElementById('myBetsList');
-    if (!window.currentUser) return;
-    
-    const history = window.currentUser.betHistory || [];
-    
-    if (history.length === 0) {
-        list.innerHTML = `
-            <div class="empty-bets">
-                <span class="empty-icon">📋</span>
-                <span>Your bet history will appear here</span>
-            </div>
-        `;
-        return;
-    }
-    
-    list.innerHTML = history.slice(0, 20).map(bet => `
-        <div class="bet-item">
-            <div class="bet-player">
-                <div class="bet-amount">${bet.amount.toFixed(2)} TON</div>
-                <div class="bet-status ${bet.result}">${bet.multiplier?.toFixed(2)}x</div>
-            </div>
-            <div class="bet-result">
-                <div class="bet-amount ${bet.result === 'win' ? 'positive' : 'negative'}">
-                    ${bet.profit >= 0 ? '+' : ''}${bet.profit.toFixed(2)} TON
-                </div>
-            </div>
-        </div>
-    `).join('');
+async function loadMyBets() {
+    const l = document.getElementById('myBetsList');
+    const h = window.currentUser?.betHistory || [];
+    if (!h.length) { l.innerHTML = '<div class="empty-bets">📋 Your bets will appear here</div>'; return; }
+    l.innerHTML = h.slice(0, 20).map(b => `<div class="bet-item"><div class="bet-player"><span>${b.amount.toFixed(2)} TON</span></div><div class="bet-result"><div class="bet-status ${b.result}">${b.multiplier?.toFixed(2)}x</div><div class="bet-amount ${b.result === 'win' ? 'positive' : 'negative'}">${b.profit >= 0 ? '+' : ''}${b.profit.toFixed(2)}</div></div></div>`).join('');
 }
 
-// ===== Navigation =====
-
-function switchPage(page) {
-    // Update nav
-    document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
+// Navigation
+function switchPage(p) {
+    document.querySelectorAll('.nav-item').forEach(e => e.classList.remove('active'));
     event.currentTarget.classList.add('active');
-    
-    switch (page) {
-        case 'wallet':
-            openWallet();
-            break;
-        case 'stats':
-            openStats();
-            break;
-        case 'profile':
-            openProfile();
-            break;
-        default:
-            closeAllModals();
-    }
-    
-    hapticFeedback('light');
+    if (p === 'wallet') openWallet();
+    else if (p === 'stats') openStats();
+    else if (p === 'profile') openProfile();
+    else closeModals();
+    haptic('light');
 }
 
-// ===== Modals =====
+// Modals
+function openModal(id) { document.getElementById(id)?.classList.remove('hidden'); }
+function closeModal(id) { document.getElementById(id)?.classList.add('hidden'); }
+function closeModals() { document.querySelectorAll('.modal').forEach(m => m.classList.add('hidden')); }
 
-function openModal(id) {
-    document.getElementById(id)?.classList.remove('hidden');
-}
-
-function closeModal(id) {
-    document.getElementById(id)?.classList.add('hidden');
-}
-
-function closeAllModals() {
-    document.querySelectorAll('.modal').forEach(m => m.classList.add('hidden'));
-}
-
-// ===== Wallet =====
-
+// Wallet
 function openWallet() {
-    updateBalanceDisplay();
-    loadTransactions();
-    
-    // Show deposit by default
-    showDepositSection();
-    
-    // Set deposit memo
-    if (window.currentUser) {
-        document.getElementById('depositMemo').textContent = `D_${window.currentUser.oderId}`;
-    }
-    
+    updateBalance();
+    if (window.currentUser) document.getElementById('depositMemo').textContent = 'D_' + window.currentUser.oderId;
+    loadTx();
+    showSection('deposit');
     openModal('walletModal');
 }
 
-function showDepositSection() {
-    document.getElementById('depositSection').classList.remove('hidden');
-    document.getElementById('withdrawSection').classList.add('hidden');
-    document.getElementById('giftSection').classList.add('hidden');
+function showSection(s) {
+    ['deposit', 'withdraw', 'gift'].forEach(x => {
+        document.getElementById(x + 'Section')?.classList.toggle('hidden', x !== s);
+    });
 }
 
-function showWithdrawSection() {
-    document.getElementById('withdrawSection').classList.remove('hidden');
-    document.getElementById('depositSection').classList.add('hidden');
-    document.getElementById('giftSection').classList.add('hidden');
-}
-
-function showGiftSection() {
-    document.getElementById('giftSection').classList.remove('hidden');
-    document.getElementById('depositSection').classList.add('hidden');
-    document.getElementById('withdrawSection').classList.add('hidden');
-}
-
-function copyDepositAddress() {
-    const address = document.getElementById('depositAddressText').textContent;
-    copyToClipboard(address, 'Address copied!');
+function copyAddress() {
+    navigator.clipboard.writeText(CONFIG.TON_WALLET);
+    showToast('Address copied!', 'success');
+    haptic('light');
 }
 
 function copyMemo() {
-    const memo = document.getElementById('depositMemo').textContent;
-    copyToClipboard(memo, 'Memo copied!');
-}
-
-function setWithdrawMax() {
-    const balance = window.currentUser?.balance || 0;
-    document.getElementById('withdrawAmountInput').value = balance.toFixed(2);
+    const m = document.getElementById('depositMemo').textContent;
+    navigator.clipboard.writeText(m);
+    showToast('Memo copied!', 'success');
+    haptic('light');
 }
 
 async function submitWithdraw() {
-    const amount = parseFloat(document.getElementById('withdrawAmountInput').value);
-    const address = document.getElementById('withdrawAddressInput').value.trim();
+    const a = parseFloat(document.getElementById('withdrawAmount').value);
+    const addr = document.getElementById('withdrawAddress').value.trim();
     
-    if (isNaN(amount) || amount < CONFIG.MIN_WITHDRAW) {
-        showToast(`Minimum withdrawal is ${CONFIG.MIN_WITHDRAW} TON`, 'error');
-        return;
-    }
-    
-    if (amount > (window.currentUser?.balance || 0)) {
-        showToast('Insufficient balance', 'error');
-        return;
-    }
-    
-    if (!address || (!address.startsWith('EQ') && !address.startsWith('UQ'))) {
-        showToast('Enter a valid TON address', 'error');
-        return;
-    }
+    if (isNaN(a) || a < CONFIG.MIN_WITHDRAW) { showToast('Min: ' + CONFIG.MIN_WITHDRAW + ' TON', 'error'); return; }
+    if (a > (window.currentUser?.balance || 0)) { showToast('Insufficient balance', 'error'); return; }
+    if (!addr || (!addr.startsWith('EQ') && !addr.startsWith('UQ'))) { showToast('Invalid address', 'error'); return; }
     
     try {
-        await db.requestWithdrawal(window.currentUser.oderId, amount, address);
-        
-        window.currentUser.balance -= amount;
-        updateBalanceDisplay();
-        
-        document.getElementById('withdrawAmountInput').value = '';
-        document.getElementById('withdrawAddressInput').value = '';
-        
-        showToast('Withdrawal request submitted!', 'success');
+        await db.withdraw(window.currentUser.oderId, a, addr);
+        window.currentUser.balance -= a;
+        updateBalance();
+        document.getElementById('withdrawAmount').value = '';
+        document.getElementById('withdrawAddress').value = '';
+        showToast('Withdrawal submitted!', 'success');
         closeModal('walletModal');
-        
-    } catch (error) {
-        showToast(error.message, 'error');
-    }
+    } catch (e) { showToast(e.message, 'error'); }
 }
 
-async function loadTransactions() {
-    const list = document.getElementById('transactionsList');
-    const transactions = window.currentUser?.transactions || [];
-    
-    if (transactions.length === 0) {
-        list.innerHTML = '<div class="empty-transactions">No transactions yet</div>';
-        return;
-    }
-    
-    list.innerHTML = transactions.slice(0, 20).map(tx => {
-        let icon = '💰';
-        let type = 'Transaction';
-        
-        if (tx.type === 'deposit') {
-            icon = '📥';
-            type = 'Deposit';
-        } else if (tx.type === 'withdrawal') {
-            icon = '📤';
-            type = 'Withdrawal';
-        } else if (tx.type === 'gift_sale') {
-            icon = '🎁';
-            type = 'Gift Sale';
-        }
-        
-        const amountClass = tx.amount >= 0 ? 'positive' : 'negative';
-        const statusClass = tx.status === 'pending' ? 'pending' : amountClass;
-        
-        return `
-            <div class="transaction-item">
-                <div class="tx-info">
-                    <div class="tx-icon">${icon}</div>
-                    <div class="tx-details">
-                        <div class="tx-type">${type}</div>
-                        <div class="tx-date">${new Date(tx.timestamp).toLocaleString()}</div>
-                    </div>
-                </div>
-                <div class="tx-amount ${statusClass}">
-                    ${tx.amount >= 0 ? '+' : ''}${tx.amount.toFixed(2)} TON
-                </div>
-            </div>
-        `;
+async function loadTx() {
+    const l = document.getElementById('transactionsList');
+    const tx = window.currentUser?.transactions || [];
+    if (!tx.length) { l.innerHTML = '<div class="empty-tx">No transactions</div>'; return; }
+    l.innerHTML = tx.slice(0, 20).map(t => {
+        const ic = t.type === 'deposit' ? '📥' : t.type === 'withdraw' ? '📤' : '🎁';
+        const cl = t.amount >= 0 ? 'positive' : 'negative';
+        return `<div class="tx-item"><div class="tx-info"><div class="tx-icon">${ic}</div><div><div class="tx-type">${t.type}</div><div class="tx-date">${new Date(t.time).toLocaleString()}</div></div></div><div class="tx-amount ${cl}">${t.amount >= 0 ? '+' : ''}${t.amount.toFixed(2)} TON</div></div>`;
     }).join('');
 }
 
-// ===== Stats =====
-
+// Stats
 async function openStats() {
-    await refreshUserData();
+    await refreshUser();
+    const u = window.currentUser;
+    if (!u) return;
+    const g = u.gamesPlayed || 0;
+    const w = u.wins || 0;
+    const l = u.losses || 0;
+    const wr = g > 0 ? ((w / g) * 100).toFixed(1) : '0';
+    const p = (u.biggestWin || 0) - (u.totalWagered || 0) + (u.balance || 0);
     
-    const user = window.currentUser;
-    if (!user) return;
+    document.getElementById('statGames').textContent = g;
+    document.getElementById('statWins').textContent = w;
+    document.getElementById('statLosses').textContent = l;
+    document.getElementById('statWinRate').textContent = wr + '%';
     
-    const games = user.gamesPlayed || 0;
-    const wins = user.wins || 0;
-    const losses = user.losses || 0;
-    const winRate = games > 0 ? ((wins / games) * 100).toFixed(1) : '0';
-    const profit = user.totalProfit || 0;
-    
-    document.getElementById('statTotalGames').textContent = games;
-    document.getElementById('statWins').textContent = wins;
-    document.getElementById('statLosses').textContent = losses;
-    document.getElementById('statWinRate').textContent = `${winRate}%`;
-    document.getElementById('statTotalWagered').textContent = (user.totalWagered || 0).toFixed(2);
-    document.getElementById('statBiggestWin').textContent = (user.biggestWin || 0).toFixed(2);
-    
-    const profitEl = document.getElementById('statNetProfit');
-    profitEl.textContent = `${profit >= 0 ? '+' : ''}${profit.toFixed(2)} TON`;
-    profitEl.className = `profit-value ${profit >= 0 ? 'positive' : 'negative'}`;
+    const pe = document.getElementById('statProfit');
+    pe.textContent = (p >= 0 ? '+' : '') + p.toFixed(2) + ' TON';
+    pe.className = 'profit-value ' + (p >= 0 ? 'positive' : 'negative');
     
     loadBetHistory();
     openModal('statsModal');
 }
 
-async function loadBetHistory() {
-    const list = document.getElementById('betHistoryList');
-    const history = window.currentUser?.betHistory || [];
-    
-    if (history.length === 0) {
-        list.innerHTML = '<div class="empty-history">No bet history</div>';
-        return;
-    }
-    
-    list.innerHTML = history.slice(0, 30).map(bet => `
-        <div class="history-bet-item">
-            <div class="history-bet-info">
-                <div class="history-multiplier">${bet.multiplier?.toFixed(2)}x</div>
-                <div class="history-time">${new Date(bet.timestamp).toLocaleString()}</div>
-            </div>
-            <div class="history-bet-result">
-                <div class="result-amount">${bet.amount.toFixed(2)} TON</div>
-                <div class="result-profit ${bet.result}">
-                    ${bet.profit >= 0 ? '+' : ''}${bet.profit.toFixed(2)} TON
-                </div>
-            </div>
-        </div>
-    `).join('');
+function loadBetHistory() {
+    const l = document.getElementById('betHistoryList');
+    const h = window.currentUser?.betHistory || [];
+    if (!h.length) { l.innerHTML = '<div class="empty-tx">No history</div>'; return; }
+    l.innerHTML = h.slice(0, 30).map(b => `<div class="history-item"><div class="history-info"><div class="history-mult">${b.multiplier?.toFixed(2)}x</div><div class="history-time">${new Date(b.time).toLocaleString()}</div></div><div class="history-result"><div class="result-amount">${b.amount.toFixed(2)} TON</div><div class="result-profit ${b.result}">${b.profit >= 0 ? '+' : ''}${b.profit.toFixed(2)}</div></div></div>`).join('');
 }
 
-// ===== Profile =====
-
+// Profile
 function openProfile() {
-    updateProfileDisplay();
+    const u = window.currentUser;
+    if (!u) return;
+    document.getElementById('profileJoined').textContent = new Date(u.createdAt).toLocaleDateString();
+    document.getElementById('profileGames').textContent = u.gamesPlayed || 0;
+    document.getElementById('profileWagered').textContent = (u.totalWagered || 0).toFixed(2) + ' TON';
+    document.getElementById('profileBestWin').textContent = (u.biggestWin || 0).toFixed(2) + ' TON';
     openModal('profileModal');
 }
 
-function shareProfile() {
-    const user = window.currentUser;
-    if (!user) return;
-    
-    const text = `🚀 I'm playing Crash Game!\n\n` +
-        `🎮 Games: ${user.gamesPlayed || 0}\n` +
-        `🏆 Biggest Win: ${(user.biggestWin || 0).toFixed(2)} TON\n\n` +
-        `Join me: t.me/${CONFIG.BOT_USERNAME}`;
-    
-    if (window.tg) {
-        window.tg.shareUrl?.(`https://t.me/${CONFIG.BOT_USERNAME}`, text);
-    } else {
-        copyToClipboard(text, 'Profile copied!');
-    }
-}
+// Admin
+function openAdmin() { window.location.href = 'admin.html'; }
 
-// ===== Admin =====
-
-function openAdminPanel() {
-    window.location.href = 'admin.html';
-}
-
-// ===== Utilities =====
-
-function copyToClipboard(text, successMessage = 'Copied!') {
-    navigator.clipboard.writeText(text).then(() => {
-        showToast(successMessage, 'success');
-        hapticFeedback('light');
-    }).catch(() => {
-        showToast('Failed to copy', 'error');
-    });
-}
-
-function hapticFeedback(type = 'light') {
+// Utils
+function haptic(t) {
     if (window.tg?.HapticFeedback) {
-        switch (type) {
-            case 'light':
-                window.tg.HapticFeedback.impactOccurred('light');
-                break;
-            case 'medium':
-                window.tg.HapticFeedback.impactOccurred('medium');
-                break;
-            case 'heavy':
-                window.tg.HapticFeedback.impactOccurred('heavy');
-                break;
-            case 'success':
-                window.tg.HapticFeedback.notificationOccurred('success');
-                break;
-            case 'error':
-                window.tg.HapticFeedback.notificationOccurred('error');
-                break;
-        }
+        if (t === 'light') window.tg.HapticFeedback.impactOccurred('light');
+        else if (t === 'success') window.tg.HapticFeedback.notificationOccurred('success');
+        else if (t === 'error') window.tg.HapticFeedback.notificationOccurred('error');
     }
 }
 
-function showToast(message, type = 'info') {
-    const container = document.getElementById('toastContainer');
-    
-    const toast = document.createElement('div');
-    toast.className = `toast ${type}`;
-    toast.textContent = message;
-    
-    container.appendChild(toast);
-    
-    setTimeout(() => {
-        toast.style.animation = 'toastSlide 0.3s ease-out reverse';
-        setTimeout(() => toast.remove(), 300);
-    }, 3000);
+function showToast(m, t = 'info') {
+    const c = document.getElementById('toastContainer');
+    const e = document.createElement('div');
+    e.className = 'toast ' + t;
+    e.textContent = m;
+    c.appendChild(e);
+    setTimeout(() => e.remove(), 3000);
 }
 
-// ===== Global Exports =====
+// Exports
 window.adjustBet = adjustBet;
 window.setBetAmount = setBetAmount;
 window.setBetMax = setBetMax;
@@ -652,15 +303,11 @@ window.switchPage = switchPage;
 window.openModal = openModal;
 window.closeModal = closeModal;
 window.openWallet = openWallet;
-window.showDepositSection = showDepositSection;
-window.showWithdrawSection = showWithdrawSection;
-window.showGiftSection = showGiftSection;
-window.copyDepositAddress = copyDepositAddress;
+window.showSection = showSection;
+window.copyAddress = copyAddress;
 window.copyMemo = copyMemo;
-window.setWithdrawMax = setWithdrawMax;
 window.submitWithdraw = submitWithdraw;
-window.openAdminPanel = openAdminPanel;
-window.shareProfile = shareProfile;
+window.openAdmin = openAdmin;
 window.showToast = showToast;
-window.updateBalanceDisplay = updateBalanceDisplay;
-window.refreshUserData = refreshUserData;
+window.updateBalance = updateBalance;
+window.refreshUser = refreshUser;
