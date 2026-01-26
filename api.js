@@ -2,7 +2,7 @@
 const CONFIG = {
     // JSONBin.io - Setup.html မှာ ရယူပြီး ဒီမှာထည့်ပါ
     JSONBIN_API_KEY: '$2a$10$kY8eIjkqtndEmBQXGPOdi.40EhjkTsexeMxLVHiHD5xDj0u6fISi6', // ← setup.html ကနေ ရယူပါ
-    JSONBIN_BIN_ID: '6977de5ed0ea881f40882040',  // ← setup.html ကနေ ရယူပါ
+    JSONBIN_BIN_ID: '6977e053ae596e708ff88fa0',  // ← setup.html ကနေ ရယူပါ
     
     // Your Telegram & Wallet Info
     ADMIN_TELEGRAM_ID: '1538232799',
