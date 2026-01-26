@@ -1,484 +1,265 @@
-// ===== Crash Game Engine =====
 class CrashGame {
     constructor() {
         this.canvas = null;
         this.ctx = null;
-        
-        // Game State
-        this.state = 'waiting'; // waiting, betting, running, crashed
+        this.state = 'waiting';
         this.multiplier = 1.00;
         this.crashPoint = null;
         this.gameId = null;
         this.startTime = null;
         this.countdown = CONFIG.BETTING_TIME;
-        
-        // Bets
         this.bets = [];
         this.myBet = null;
         this.history = [];
-        
-        // Graphics
         this.path = [];
         this.stars = [];
-        this.particles = [];
-        
-        // Timers
-        this.animationId = null;
-        this.gameLoopId = null;
-        this.countdownId = null;
-        this.syncId = null;
-        
-        // Sync
-        this.lastSyncTime = 0;
-        this.syncInterval = 2000;
+        this.animId = null;
+        this.loopId = null;
+        this.countId = null;
     }
 
-    // ===== Initialization =====
-    
     async init() {
         this.canvas = document.getElementById('gameCanvas');
-        if (!this.canvas) {
-            console.error('Canvas not found');
-            return;
-        }
-        
+        if (!this.canvas) return;
         this.ctx = this.canvas.getContext('2d');
         this.resize();
-        this.createStars();
-        
+        this.makeStars();
         window.addEventListener('resize', () => this.resize());
-        
-        // Start render loop
         this.render();
-        
-        // Load initial state
-        await this.syncWithServer();
-        
-        // Start sync loop
-        this.startSyncLoop();
-        
-        // Load history
         await this.loadHistory();
-        
-        console.log('🎮 Game Engine initialized');
+        this.startSync();
+        console.log('🎮 Game ready');
     }
 
     resize() {
-        const wrapper = this.canvas.parentElement;
-        const rect = wrapper.getBoundingClientRect();
-        this.canvas.width = rect.width;
-        this.canvas.height = rect.height;
-        this.createStars();
+        const w = this.canvas.parentElement;
+        this.canvas.width = w.clientWidth;
+        this.canvas.height = w.clientHeight;
+        this.makeStars();
     }
 
-    createStars() {
+    makeStars() {
         this.stars = [];
-        const count = Math.floor((this.canvas.width * this.canvas.height) / 5000);
-        
-        for (let i = 0; i < count; i++) {
+        for (let i = 0; i < 30; i++) {
             this.stars.push({
                 x: Math.random() * this.canvas.width,
                 y: Math.random() * this.canvas.height,
-                size: Math.random() * 1.5 + 0.5,
-                speed: Math.random() * 0.3 + 0.1,
-                alpha: Math.random() * 0.5 + 0.3
+                s: Math.random() * 1.5 + 0.5,
+                sp: Math.random() * 0.3 + 0.1
             });
         }
     }
 
-    // ===== Sync with Server =====
-    
-    startSyncLoop() {
-        this.syncId = setInterval(() => {
+    startSync() {
+        setInterval(() => {
             if (this.state === 'waiting' || this.state === 'betting') {
-                this.syncWithServer();
+                this.sync();
             }
-        }, this.syncInterval);
+        }, 2000);
     }
 
-    async syncWithServer() {
+    async sync() {
         try {
-            const gameState = await db.getGameState();
-            
-            if (gameState.status !== this.state) {
-                this.handleStateChange(gameState);
-            }
-            
-            // Update bets
-            if (gameState.bets) {
-                this.bets = gameState.bets;
-                this.updateBetsList();
-                
-                // Find my bet
+            const gs = await db.getGameState();
+            if (gs.status !== this.state) this.handleState(gs);
+            if (gs.bets) {
+                this.bets = gs.bets;
+                this.updateBets();
                 if (window.currentUser) {
                     this.myBet = this.bets.find(b => b.oderId === window.currentUser.oderId) || null;
                 }
             }
-            
-            this.lastSyncTime = Date.now();
-        } catch (error) {
-            console.error('Sync error:', error);
-        }
+        } catch (e) { console.error('Sync:', e); }
     }
 
-    handleStateChange(gameState) {
-        const newState = gameState.status;
-        
-        switch (newState) {
-            case 'betting':
-                if (this.state !== 'betting') {
-                    this.startBettingPhase(gameState);
-                }
-                break;
-            case 'running':
-                if (this.state !== 'running') {
-                    this.startRunningPhase(gameState);
-                }
-                break;
-            case 'crashed':
-                if (this.state !== 'crashed') {
-                    this.handleCrash(gameState.crashPoint || gameState.multiplier);
-                }
-                break;
-        }
+    handleState(gs) {
+        if (gs.status === 'betting' && this.state !== 'betting') this.startBetting(gs);
+        else if (gs.status === 'running' && this.state !== 'running') this.startRunning(gs);
+        else if (gs.status === 'crashed' && this.state !== 'crashed') this.doCrash(gs.crashPoint);
     }
 
-    // ===== Game Phases =====
-    
-    async startBettingPhase(gameState = null) {
-        // Clear previous
-        clearInterval(this.gameLoopId);
-        clearInterval(this.countdownId);
-        
+    async startBetting(gs = null) {
+        clearInterval(this.loopId);
+        clearInterval(this.countId);
         this.state = 'betting';
         this.multiplier = 1.00;
         this.path = [];
         this.myBet = null;
-        this.particles = [];
         
-        if (gameState) {
-            this.gameId = gameState.id;
-            this.crashPoint = gameState.crashPoint;
-            this.bets = gameState.bets || [];
+        if (gs) {
+            this.gameId = gs.id;
+            this.crashPoint = gs.crashPoint;
+            this.bets = gs.bets || [];
         } else {
-            // Start new game on server
-            const newGame = await db.startNewGame();
-            this.gameId = newGame.id;
-            this.crashPoint = newGame.crashPoint;
+            const ng = await db.newGame();
+            this.gameId = ng.id;
+            this.crashPoint = ng.crashPoint;
             this.bets = [];
         }
         
         this.countdown = CONFIG.BETTING_TIME;
-        
-        console.log(`📢 Betting phase started. Game: ${this.gameId}`);
-        
         this.updateUI();
-        this.showCountdownOverlay();
+        this.showCountdown();
         
-        // Start countdown
-        this.countdownId = setInterval(() => {
+        this.countId = setInterval(() => {
             this.countdown--;
-            this.updateCountdownDisplay();
-            
+            document.getElementById('countdownValue').textContent = this.countdown;
             if (this.countdown <= 0) {
-                clearInterval(this.countdownId);
-                this.startRunningPhase();
+                clearInterval(this.countId);
+                this.startRunning();
             }
         }, 1000);
     }
 
-    async startRunningPhase(gameState = null) {
-        clearInterval(this.countdownId);
-        
+    async startRunning(gs = null) {
+        clearInterval(this.countId);
         this.state = 'running';
         this.startTime = Date.now();
         this.path = [{ x: 40, y: this.canvas.height - 40 }];
-        
-        if (gameState) {
-            this.crashPoint = gameState.crashPoint;
-        }
-        
-        // Update server
-        await db.updateGameState({ status: 'running', startTime: this.startTime });
-        
-        console.log(`🚀 Game running. Crash at: ${this.crashPoint}x`);
-        
-        this.hideCountdownOverlay();
+        if (gs) this.crashPoint = gs.crashPoint;
+        await db.updateGame({ status: 'running', startTime: this.startTime });
+        this.hideCountdown();
         this.updateUI();
-        
-        // Start game loop
-        this.gameLoopId = setInterval(() => this.gameLoop(), 50);
+        this.loopId = setInterval(() => this.loop(), 50);
     }
 
-    gameLoop() {
+    loop() {
         if (this.state !== 'running') return;
+        const t = (Date.now() - this.startTime) / 1000;
+        let sp = 1;
+        if (this.multiplier >= 2) sp = 1.2;
+        if (this.multiplier >= 5) sp = 1.5;
+        if (this.multiplier >= 10) sp = 2;
+        if (this.multiplier >= 50) sp = 3;
         
-        const elapsed = (Date.now() - this.startTime) / 1000;
-        
-        // Dynamic speed based on multiplier
-        let speed = 1;
-        if (this.multiplier >= 2) speed = 1.2;
-        if (this.multiplier >= 5) speed = 1.5;
-        if (this.multiplier >= 10) speed = 2;
-        if (this.multiplier >= 25) speed = 2.5;
-        if (this.multiplier >= 50) speed = 3;
-        if (this.multiplier >= 100) speed = 4;
-        
-        // Calculate multiplier
-        this.multiplier = Math.pow(Math.E, 0.012 * speed * elapsed * 10);
+        this.multiplier = Math.pow(Math.E, 0.012 * sp * t * 10);
         this.multiplier = Math.floor(this.multiplier * 100) / 100;
         
-        // Update path
-        this.updatePath();
-        
-        // Check auto cashout
-        this.checkAutoCashout();
-        
-        // Update display
-        this.updateMultiplierDisplay();
-        
-        // Check crash
-        if (this.multiplier >= this.crashPoint) {
-            this.triggerCrash();
-        }
-    }
-
-    updatePath() {
-        const maxX = this.canvas.width - 40;
-        const maxY = 40;
-        
-        const progress = Math.min(0.95, (this.multiplier - 1) / 20);
-        
-        // Exponential curve
-        const x = 40 + progress * (maxX - 40);
-        const y = this.canvas.height - 40 - Math.pow(progress, 0.7) * (this.canvas.height - 80);
-        
+        const p = Math.min(0.95, (this.multiplier - 1) / 20);
+        const x = 40 + p * (this.canvas.width - 80);
+        const y = this.canvas.height - 40 - Math.pow(p, 0.7) * (this.canvas.height - 80);
         this.path.push({ x, y });
+        if (this.path.length > 300) this.path = this.path.slice(-300);
         
-        // Limit path length
-        if (this.path.length > 400) {
-            this.path = this.path.slice(-400);
-        }
+        this.checkAuto();
+        this.updateMult();
+        
+        if (this.multiplier >= this.crashPoint) this.doCrash(this.crashPoint);
     }
 
-    checkAutoCashout() {
+    checkAuto() {
         if (this.myBet && !this.myBet.cashedOut && this.myBet.autoCashout) {
-            if (this.multiplier >= this.myBet.autoCashout) {
-                this.cashout();
-            }
+            if (this.multiplier >= this.myBet.autoCashout) this.cashout();
         }
     }
 
-    async triggerCrash() {
-        clearInterval(this.gameLoopId);
-        
+    async doCrash(cp) {
+        clearInterval(this.loopId);
         this.state = 'crashed';
-        this.multiplier = this.crashPoint;
+        this.multiplier = cp;
+        await db.endGame(cp);
         
-        // Create explosion particles
-        this.createExplosion();
+        this.history.unshift({ id: this.gameId, crashPoint: cp, time: Date.now() });
+        if (this.history.length > 20) this.history = this.history.slice(0, 20);
         
-        // Save to server
-        await db.endGame(this.crashPoint);
-        
-        // Add to local history
-        this.history.unshift({
-            id: this.gameId,
-            crashPoint: this.crashPoint,
-            timestamp: Date.now()
-        });
-        
-        if (this.history.length > 20) {
-            this.history = this.history.slice(0, 20);
-        }
-        
-        console.log(`💥 Crashed at ${this.crashPoint}x`);
-        
-        // Update UI
         this.updateUI();
-        this.updateHistoryTicker();
-        this.showCrashOverlay();
+        this.updateTicker();
+        this.showCrash();
         
-        // Notify loss
         if (this.myBet && !this.myBet.cashedOut) {
-            showToast(`Crashed at ${this.crashPoint}x! Lost ${this.myBet.amount.toFixed(2)} TON`, 'error');
-            
-            // Refresh balance
-            await refreshUserData();
+            showToast(`Crashed at ${cp}x! Lost ${this.myBet.amount} TON`, 'error');
+            await refreshUser();
         }
         
-        // Haptic
-        hapticFeedback('error');
+        haptic('error');
         
-        // Wait and start new round
         setTimeout(() => {
-            this.hideCrashOverlay();
-            this.startBettingPhase();
+            this.hideCrash();
+            this.startBetting();
         }, CONFIG.CRASH_DELAY * 1000);
     }
 
-    handleCrash(crashPoint) {
-        this.crashPoint = crashPoint;
-        this.triggerCrash();
-    }
-
-    createExplosion() {
-        const last = this.path[this.path.length - 1] || { x: this.canvas.width / 2, y: this.canvas.height / 2 };
+    async placeBet(amount, auto) {
+        if (this.state !== 'betting') throw new Error('Betting closed');
+        if (this.myBet) throw new Error('Already bet');
+        if (!window.currentUser) throw new Error('Login first');
+        if (amount < CONFIG.MIN_BET) throw new Error('Min: ' + CONFIG.MIN_BET);
+        if (amount > CONFIG.MAX_BET) throw new Error('Max: ' + CONFIG.MAX_BET);
+        if (amount > (window.currentUser.balance || 0)) throw new Error('Insufficient balance');
         
-        for (let i = 0; i < 30; i++) {
-            const angle = (Math.PI * 2 * i) / 30;
-            const speed = 2 + Math.random() * 4;
-            
-            this.particles.push({
-                x: last.x,
-                y: last.y,
-                vx: Math.cos(angle) * speed,
-                vy: Math.sin(angle) * speed,
-                life: 1,
-                size: 2 + Math.random() * 4,
-                color: Math.random() > 0.5 ? '#ff6b6b' : '#ffd93d'
-            });
-        }
-    }
-
-    // ===== Betting =====
-    
-    async placeBet(amount, autoCashout = null) {
-        if (this.state !== 'betting') {
-            throw new Error('Betting is closed');
-        }
-        
-        if (this.myBet) {
-            throw new Error('Already placed a bet');
-        }
-        
-        if (!window.currentUser) {
-            throw new Error('Please login first');
-        }
-        
-        if (amount < CONFIG.MIN_BET) {
-            throw new Error(`Minimum bet is ${CONFIG.MIN_BET} TON`);
-        }
-        
-        if (amount > CONFIG.MAX_BET) {
-            throw new Error(`Maximum bet is ${CONFIG.MAX_BET} TON`);
-        }
-        
-        if (amount > (window.currentUser.balance || 0)) {
-            throw new Error('Insufficient balance');
-        }
-        
-        // Place bet on server
-        const result = await db.placeBet(window.currentUser.oderId, amount, autoCashout);
-        
-        // Update local state
-        window.currentUser.balance = result.balance;
-        this.myBet = result.bet;
-        this.bets.push(result.bet);
-        
-        // Update UI
-        updateBalanceDisplay();
-        this.updateBetsList();
+        const r = await db.placeBet(window.currentUser.oderId, amount, auto);
+        window.currentUser.balance = r.balance;
+        this.myBet = r.bet;
+        this.bets.push(r.bet);
+        updateBalance();
+        this.updateBets();
         this.updateUI();
-        
-        hapticFeedback('success');
-        
-        return result;
+        haptic('success');
+        return r;
     }
 
     async cashout() {
-        if (this.state !== 'running') {
-            throw new Error('Game is not running');
-        }
+        if (this.state !== 'running') throw new Error('Not running');
+        if (!this.myBet || this.myBet.cashedOut) throw new Error('No bet');
         
-        if (!this.myBet || this.myBet.cashedOut) {
-            throw new Error('No active bet');
-        }
-        
-        // Cashout on server
-        const result = await db.cashoutBet(window.currentUser.oderId, this.multiplier);
-        
-        // Update local state
+        const r = await db.cashout(window.currentUser.oderId, this.multiplier);
         this.myBet.cashedOut = true;
-        this.myBet.cashoutMultiplier = this.multiplier;
-        this.myBet.profit = result.profit;
+        this.myBet.multiplier = this.multiplier;
+        this.myBet.profit = r.profit;
+        window.currentUser.balance = r.balance;
         
-        window.currentUser.balance = result.balance;
-        
-        // Update UI
-        updateBalanceDisplay();
-        this.updateBetsList();
+        updateBalance();
+        this.updateBets();
         this.updateUI();
-        
-        // Show win overlay
-        this.showWinOverlay(result.profit);
-        
-        showToast(`Cashed out at ${this.multiplier.toFixed(2)}x! +${result.profit.toFixed(2)} TON`, 'success');
-        
-        hapticFeedback('success');
-        
-        return result;
+        this.showWin(r.profit);
+        showToast(`Won ${r.profit.toFixed(2)} TON at ${this.multiplier}x!`, 'success');
+        haptic('success');
+        return r;
     }
 
-    // ===== Rendering =====
-    
     render() {
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-        
-        this.drawBackground();
+        this.drawBg();
         this.drawStars();
         this.drawGrid();
-        
         if (this.state === 'running' || this.state === 'crashed') {
             this.drawPath();
             this.drawRocket();
         }
-        
-        this.drawParticles();
-        
-        this.animationId = requestAnimationFrame(() => this.render());
+        this.animId = requestAnimationFrame(() => this.render());
     }
 
-    drawBackground() {
-        const gradient = this.ctx.createLinearGradient(0, 0, 0, this.canvas.height);
-        gradient.addColorStop(0, '#0d0d15');
-        gradient.addColorStop(1, '#1a1a2e');
-        this.ctx.fillStyle = gradient;
+    drawBg() {
+        const g = this.ctx.createLinearGradient(0, 0, 0, this.canvas.height);
+        g.addColorStop(0, '#0d0d15');
+        g.addColorStop(1, '#1a1a2e');
+        this.ctx.fillStyle = g;
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
     }
 
     drawStars() {
-        for (const star of this.stars) {
+        for (const s of this.stars) {
             this.ctx.beginPath();
-            this.ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
-            this.ctx.fillStyle = `rgba(255, 255, 255, ${star.alpha})`;
+            this.ctx.arc(s.x, s.y, s.s, 0, Math.PI * 2);
+            this.ctx.fillStyle = `rgba(255,255,255,${0.3 + Math.random() * 0.3})`;
             this.ctx.fill();
-            
-            // Move stars when running
             if (this.state === 'running') {
-                star.y += star.speed;
-                if (star.y > this.canvas.height) {
-                    star.y = 0;
-                    star.x = Math.random() * this.canvas.width;
-                }
+                s.y += s.sp;
+                if (s.y > this.canvas.height) { s.y = 0; s.x = Math.random() * this.canvas.width; }
             }
         }
     }
 
     drawGrid() {
-        this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
+        this.ctx.strokeStyle = 'rgba(255,255,255,0.03)';
         this.ctx.lineWidth = 1;
-        
-        const gridSize = 50;
-        
-        for (let x = 0; x <= this.canvas.width; x += gridSize) {
+        for (let x = 0; x <= this.canvas.width; x += 50) {
             this.ctx.beginPath();
             this.ctx.moveTo(x, 0);
             this.ctx.lineTo(x, this.canvas.height);
             this.ctx.stroke();
         }
-        
-        for (let y = 0; y <= this.canvas.height; y += gridSize) {
+        for (let y = 0; y <= this.canvas.height; y += 50) {
             this.ctx.beginPath();
             this.ctx.moveTo(0, y);
             this.ctx.lineTo(this.canvas.width, y);
@@ -488,317 +269,145 @@ class CrashGame {
 
     drawPath() {
         if (this.path.length < 2) return;
-        
-        // Glow
-        this.ctx.shadowBlur = 20;
+        this.ctx.shadowBlur = 15;
         this.ctx.shadowColor = this.state === 'crashed' ? '#ff6b6b' : '#00d68f';
-        
-        // Path line
         this.ctx.beginPath();
         this.ctx.moveTo(this.path[0].x, this.path[0].y);
-        
-        for (let i = 1; i < this.path.length; i++) {
-            this.ctx.lineTo(this.path[i].x, this.path[i].y);
-        }
-        
+        for (let i = 1; i < this.path.length; i++) this.ctx.lineTo(this.path[i].x, this.path[i].y);
         this.ctx.strokeStyle = this.state === 'crashed' ? '#ff6b6b' : '#00d68f';
         this.ctx.lineWidth = 3;
-        this.ctx.lineCap = 'round';
-        this.ctx.lineJoin = 'round';
         this.ctx.stroke();
         
-        // Fill under curve
         const last = this.path[this.path.length - 1];
         this.ctx.lineTo(last.x, this.canvas.height);
         this.ctx.lineTo(this.path[0].x, this.canvas.height);
         this.ctx.closePath();
-        
-        const gradient = this.ctx.createLinearGradient(0, 0, 0, this.canvas.height);
-        const baseColor = this.state === 'crashed' ? '255, 107, 107' : '0, 214, 143';
-        gradient.addColorStop(0, `rgba(${baseColor}, 0.4)`);
-        gradient.addColorStop(1, `rgba(${baseColor}, 0)`);
-        this.ctx.fillStyle = gradient;
+        const g = this.ctx.createLinearGradient(0, 0, 0, this.canvas.height);
+        const c = this.state === 'crashed' ? '255,107,107' : '0,214,143';
+        g.addColorStop(0, `rgba(${c},0.4)`);
+        g.addColorStop(1, `rgba(${c},0)`);
+        this.ctx.fillStyle = g;
         this.ctx.fill();
-        
         this.ctx.shadowBlur = 0;
     }
 
     drawRocket() {
-        if (this.path.length < 1) return;
-        
-        const pos = this.path[this.path.length - 1];
-        
+        if (!this.path.length) return;
+        const p = this.path[this.path.length - 1];
         this.ctx.save();
-        this.ctx.translate(pos.x, pos.y);
-        
-        // Calculate angle
+        this.ctx.translate(p.x, p.y);
         if (this.path.length > 1) {
             const prev = this.path[this.path.length - 2];
-            const angle = Math.atan2(prev.y - pos.y, pos.x - prev.x);
-            this.ctx.rotate(angle - Math.PI / 4);
-        } else {
-            this.ctx.rotate(-Math.PI / 4);
-        }
-        
-        // Draw rocket emoji
-        this.ctx.font = '32px Arial';
+            const a = Math.atan2(prev.y - p.y, p.x - prev.x);
+            this.ctx.rotate(a - Math.PI / 4);
+        } else this.ctx.rotate(-Math.PI / 4);
+        this.ctx.font = '28px Arial';
         this.ctx.textAlign = 'center';
         this.ctx.textBaseline = 'middle';
         this.ctx.fillText(this.state === 'crashed' ? '💥' : '🚀', 0, 0);
-        
         this.ctx.restore();
     }
 
-    drawParticles() {
-        for (let i = this.particles.length - 1; i >= 0; i--) {
-            const p = this.particles[i];
-            
-            p.x += p.vx;
-            p.y += p.vy;
-            p.vy += 0.1; // gravity
-            p.life -= 0.02;
-            
-            if (p.life <= 0) {
-                this.particles.splice(i, 1);
-                continue;
-            }
-            
-            this.ctx.beginPath();
-            this.ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
-            this.ctx.fillStyle = p.color;
-            this.ctx.globalAlpha = p.life;
-            this.ctx.fill();
-            this.ctx.globalAlpha = 1;
-        }
-    }
-
-    // ===== UI Updates =====
-    
     updateUI() {
-        const multiplierEl = document.getElementById('multiplierDisplay');
-        const statusEl = document.getElementById('gameStatusText');
-        const betBtn = document.getElementById('mainBetButton');
-        const betText = document.getElementById('betButtonText');
+        const m = document.getElementById('multiplierDisplay');
+        const s = document.getElementById('gameStatusText');
+        const b = document.getElementById('mainBetButton');
+        const t = document.getElementById('betButtonText');
         
-        // Multiplier
-        if (multiplierEl) {
-            multiplierEl.innerHTML = `${this.multiplier.toFixed(2)}<span class="multiplier-x">x</span>`;
-            multiplierEl.className = 'multiplier-value';
-            
-            if (this.state === 'running') {
-                multiplierEl.classList.add('running');
-            } else if (this.state === 'crashed') {
-                multiplierEl.classList.add('crashed');
-            }
+        if (m) {
+            m.innerHTML = `${this.multiplier.toFixed(2)}<span class="x">x</span>`;
+            m.className = 'multiplier-value' + (this.state === 'running' ? ' running' : this.state === 'crashed' ? ' crashed' : '');
         }
         
-        // Status
-        if (statusEl) {
-            switch (this.state) {
-                case 'waiting':
-                    statusEl.textContent = 'Waiting for players...';
-                    break;
-                case 'betting':
-                    statusEl.textContent = `Place bets! Starting in ${this.countdown}s`;
-                    break;
-                case 'running':
-                    statusEl.textContent = 'Flying... Cash out now!';
-                    break;
-                case 'crashed':
-                    statusEl.textContent = `Crashed at ${this.crashPoint}x`;
-                    break;
-            }
+        if (s) {
+            if (this.state === 'waiting') s.textContent = 'Waiting...';
+            else if (this.state === 'betting') s.textContent = `Bet now! ${this.countdown}s`;
+            else if (this.state === 'running') s.textContent = 'Cash out!';
+            else s.textContent = `Crashed ${this.crashPoint}x`;
         }
         
-        // Bet button
-        if (betBtn && betText) {
-            betBtn.className = 'main-bet-button';
-            
+        if (b && t) {
+            b.className = 'main-bet-button';
             if (this.state === 'betting') {
-                if (this.myBet) {
-                    betBtn.classList.add('waiting');
-                    betText.textContent = 'BET PLACED ✓';
-                } else {
-                    betText.textContent = 'PLACE BET';
-                }
+                if (this.myBet) { b.classList.add('waiting'); t.textContent = 'BET PLACED ✓'; }
+                else t.textContent = 'PLACE BET';
             } else if (this.state === 'running') {
                 if (this.myBet && !this.myBet.cashedOut) {
-                    betBtn.classList.add('cashout');
-                    const potential = (this.myBet.amount * this.multiplier).toFixed(2);
-                    betText.textContent = `CASH OUT ${potential} TON`;
-                } else {
-                    betBtn.classList.add('waiting');
-                    betText.textContent = this.myBet?.cashedOut ? 'CASHED OUT ✓' : 'NEXT ROUND...';
-                }
-            } else {
-                betBtn.classList.add('waiting');
-                betText.textContent = 'WAIT...';
-            }
+                    b.classList.add('cashout');
+                    t.textContent = `CASH OUT ${(this.myBet.amount * this.multiplier).toFixed(2)} TON`;
+                } else { b.classList.add('waiting'); t.textContent = this.myBet?.cashedOut ? 'CASHED ✓' : 'NEXT ROUND'; }
+            } else { b.classList.add('waiting'); t.textContent = 'WAIT...'; }
         }
         
-        this.updateBetsList();
+        this.updateBets();
     }
 
-    updateMultiplierDisplay() {
-        const multiplierEl = document.getElementById('multiplierDisplay');
-        if (multiplierEl) {
-            multiplierEl.innerHTML = `${this.multiplier.toFixed(2)}<span class="multiplier-x">x</span>`;
-        }
-        
-        // Update cashout button
+    updateMult() {
+        const m = document.getElementById('multiplierDisplay');
+        if (m) m.innerHTML = `${this.multiplier.toFixed(2)}<span class="x">x</span>`;
         if (this.myBet && !this.myBet.cashedOut) {
-            const betText = document.getElementById('betButtonText');
-            if (betText) {
-                const potential = (this.myBet.amount * this.multiplier).toFixed(2);
-                betText.textContent = `CASH OUT ${potential} TON`;
-            }
+            const t = document.getElementById('betButtonText');
+            if (t) t.textContent = `CASH OUT ${(this.myBet.amount * this.multiplier).toFixed(2)} TON`;
         }
     }
 
-    updateCountdownDisplay() {
-        const countdownEl = document.getElementById('countdownValue');
-        if (countdownEl) {
-            countdownEl.textContent = this.countdown;
-        }
+    updateBets() {
+        const l = document.getElementById('liveBetsList');
+        const c = document.getElementById('liveBetsCount');
+        if (c) c.textContent = this.bets.length;
+        if (!l) return;
         
-        const statusEl = document.getElementById('gameStatusText');
-        if (statusEl) {
-            statusEl.textContent = `Place bets! Starting in ${this.countdown}s`;
-        }
-    }
-
-    updateBetsList() {
-        const liveList = document.getElementById('liveBetsList');
-        const countEl = document.getElementById('liveBetsCount');
+        if (!this.bets.length) { l.innerHTML = '<div class="empty-bets">🎲 No bets yet</div>'; return; }
         
-        if (countEl) {
-            countEl.textContent = this.bets.length;
-        }
-        
-        if (!liveList) return;
-        
-        if (this.bets.length === 0) {
-            liveList.innerHTML = `
-                <div class="empty-bets">
-                    <span class="empty-icon">🎲</span>
-                    <span>No bets yet this round</span>
-                </div>
-            `;
-            return;
-        }
-        
-        liveList.innerHTML = this.bets.map(bet => {
-            let statusClass = 'pending';
-            let statusText = 'Playing...';
-            
-            if (bet.cashedOut) {
-                statusClass = 'win';
-                statusText = `${bet.cashoutMultiplier?.toFixed(2)}x (+${bet.profit?.toFixed(2)})`;
-            } else if (this.state === 'crashed') {
-                statusClass = 'loss';
-                statusText = 'Lost';
-            }
-            
-            const initial = (bet.username || 'P')[0].toUpperCase();
-            const isMe = window.currentUser && bet.oderId === window.currentUser.oderId;
-            
-            return `
-                <div class="bet-item ${isMe ? 'my-bet' : ''}">
-                    <div class="bet-player">
-                        <div class="bet-avatar">${initial}</div>
-                        <div class="bet-name">${isMe ? 'You' : (bet.username || 'Player')}</div>
-                    </div>
-                    <div class="bet-result">
-                        <div class="bet-amount">${bet.amount.toFixed(2)} TON</div>
-                        <div class="bet-status ${statusClass}">${statusText}</div>
-                    </div>
-                </div>
-            `;
+        l.innerHTML = this.bets.map(b => {
+            let sc = 'pending', st = 'Playing...';
+            if (b.cashedOut) { sc = 'win'; st = `${b.multiplier?.toFixed(2)}x (+${b.profit?.toFixed(2)})`; }
+            else if (this.state === 'crashed') { sc = 'loss'; st = 'Lost'; }
+            const me = window.currentUser && b.oderId === window.currentUser.oderId;
+            return `<div class="bet-item"><div class="bet-player"><div class="bet-avatar">${(b.username || 'P')[0]}</div><div class="bet-name">${me ? 'You' : b.username || 'Player'}</div></div><div class="bet-result"><div class="bet-amount">${b.amount.toFixed(2)} TON</div><div class="bet-status ${sc}">${st}</div></div></div>`;
         }).join('');
     }
 
-    updateHistoryTicker() {
-        const ticker = document.getElementById('historyTicker');
-        if (!ticker) return;
-        
-        ticker.innerHTML = this.history.slice(0, 15).map(game => {
-            let colorClass = 'low';
-            if (game.crashPoint >= 2) colorClass = 'medium';
-            if (game.crashPoint >= 5) colorClass = 'high';
-            if (game.crashPoint >= 10) colorClass = 'mega';
-            
-            return `<span class="ticker-item ${colorClass}">${game.crashPoint.toFixed(2)}x</span>`;
+    updateTicker() {
+        const t = document.getElementById('historyTicker');
+        if (!t) return;
+        t.innerHTML = this.history.slice(0, 15).map(g => {
+            let c = 'low';
+            if (g.crashPoint >= 2) c = 'medium';
+            if (g.crashPoint >= 5) c = 'high';
+            if (g.crashPoint >= 10) c = 'mega';
+            return `<span class="ticker-item ${c}">${g.crashPoint.toFixed(2)}x</span>`;
         }).join('');
     }
 
     async loadHistory() {
         try {
-            const history = await db.getGameHistory(20);
-            this.history = history;
-            this.updateHistoryTicker();
-        } catch (e) {
-            console.error('Failed to load history:', e);
-        }
+            this.history = await db.getHistory(20);
+            this.updateTicker();
+        } catch (e) { console.error('History:', e); }
     }
 
-    // ===== Overlays =====
-    
-    showCountdownOverlay() {
+    showCountdown() {
         document.getElementById('countdownOverlay')?.classList.remove('hidden');
-        document.getElementById('crashOverlay')?.classList.add('hidden');
-        document.getElementById('winOverlay')?.classList.add('hidden');
+        document.getElementById('countdownValue').textContent = this.countdown;
+    }
+    hideCountdown() { document.getElementById('countdownOverlay')?.classList.add('hidden'); }
+    showCrash() {
+        document.getElementById('crashValue').textContent = `@ ${this.crashPoint.toFixed(2)}x`;
+        document.getElementById('crashOverlay')?.classList.remove('hidden');
+    }
+    hideCrash() { document.getElementById('crashOverlay')?.classList.add('hidden'); }
+    showWin(p) {
+        document.getElementById('winAmount').textContent = `+${p.toFixed(2)} TON`;
+        const o = document.getElementById('winOverlay');
+        o?.classList.remove('hidden');
+        setTimeout(() => o?.classList.add('hidden'), 2000);
     }
 
-    hideCountdownOverlay() {
-        document.getElementById('countdownOverlay')?.classList.add('hidden');
-    }
-
-    showCrashOverlay() {
-        const overlay = document.getElementById('crashOverlay');
-        const valueEl = document.getElementById('crashValue');
-        
-        if (valueEl) valueEl.textContent = `@ ${this.crashPoint.toFixed(2)}x`;
-        overlay?.classList.remove('hidden');
-    }
-
-    hideCrashOverlay() {
-        document.getElementById('crashOverlay')?.classList.add('hidden');
-    }
-
-    showWinOverlay(profit) {
-        const overlay = document.getElementById('winOverlay');
-        const amountEl = document.getElementById('winAmount');
-        
-        if (amountEl) amountEl.textContent = `+${profit.toFixed(2)} TON`;
-        overlay?.classList.remove('hidden');
-        
-        setTimeout(() => {
-            overlay?.classList.add('hidden');
-        }, 2000);
-    }
-
-    // ===== State Getters =====
-    
     getState() {
-        return {
-            state: this.state,
-            multiplier: this.multiplier,
-            crashPoint: this.crashPoint,
-            countdown: this.countdown,
-            myBet: this.myBet,
-            bets: this.bets,
-            history: this.history
-        };
-    }
-
-    destroy() {
-        cancelAnimationFrame(this.animationId);
-        clearInterval(this.gameLoopId);
-        clearInterval(this.countdownId);
-        clearInterval(this.syncId);
+        return { state: this.state, multiplier: this.multiplier, countdown: this.countdown, myBet: this.myBet, bets: this.bets };
     }
 }
 
-// Create global instance
 const game = new CrashGame();
 window.game = game;
