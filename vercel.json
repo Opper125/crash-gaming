@@ -1,35 +1,13 @@
 {
     "version": 2,
-    "builds": [
+    "rewrites": [
         {
-            "src": "*.html",
-            "use": "@vercel/static"
+            "source": "/admin",
+            "destination": "/admin.html"
         },
         {
-            "src": "*.css",
-            "use": "@vercel/static"
-        },
-        {
-            "src": "*.js",
-            "use": "@vercel/static"
-        },
-        {
-            "src": "*.json",
-            "use": "@vercel/static"
-        }
-    ],
-    "routes": [
-        {
-            "src": "/admin",
-            "dest": "/admin.html"
-        },
-        {
-            "src": "/setup",
-            "dest": "/setup.html"
-        },
-        {
-            "src": "/(.*)",
-            "dest": "/$1"
+            "source": "/setup",
+            "destination": "/setup.html"
         }
     ],
     "headers": [
