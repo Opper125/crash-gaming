@@ -1,30 +1,30 @@
-// ===== Configuration =====
+// ===== CONFIGURATION - BIN_ID ထည့်ပါ! =====
 const CONFIG = {
-    // JSONBin.io - Setup.html မှာ ရယူပြီး ဒီမှာထည့်ပါ
-    JSONBIN_API_KEY: '$2a$10$kY8eIjkqtndEmBQXGPOdi.40EhjkTsexeMxLVHiHD5xDj0u6fISi6', // ← setup.html ကနေ ရယူပါ
-    JSONBIN_BIN_ID: '6977e053ae596e708ff88fa0',  // ← setup.html ကနေ ရယူပါ
+    // JSONBin.io
+    JSONBIN_API_KEY: '$2a$10$kY8eIjkqtndEmBQXGPOdi.40EhjkTsexeMxLVHiHD5xDj0u6fISi6',
+    JSONBIN_BIN_ID: '6977e4b7d0ea881f40882e29', // ← ဒီမှာ BIN_ID ထည့်ပါ!
     
-    // Your Telegram & Wallet Info
-    ADMIN_TELEGRAM_ID: '1538232799',
-    BOT_USERNAME: 'crash_gambaimbot', // သင့် bot username ထည့်ပါ
-    TON_WALLET: 'UQCVA9Y95Rh59Nz_kSjbxCCNogCsL5oog2dhQKrGvoKxHfdn',
+    // Telegram
+    BOT_TOKEN: '8515201517:AAFZLevC3fupA8pCbhF_8F3vlxsm31UnnXI',
+    BOT_USERNAME: 'crash_gambaimbot',
+    ADMIN_ID: '1538232799',
     CHANNEL_ID: '-1003446073632',
     
-    // Game Settings
+    // TON
+    TON_WALLET: 'UQCVA9Y95Rh59Nz_kSjbxCCNogCsL5oog2dhQKrGvoKxHfdn',
+    
+    // Game
     MIN_BET: 0.1,
     MAX_BET: 100,
     MIN_WITHDRAW: 1,
     HOUSE_EDGE: 0.03,
     BETTING_TIME: 10,
-    CRASH_DELAY: 3,
-    
-    // TON Price (for USD display)
-    TON_PRICE_USD: 5.50
+    CRASH_DELAY: 3
 };
 
-// Check if configured
+// Config check
 function isConfigured() {
-    return CONFIG.JSONBIN_API_KEY && CONFIG.JSONBIN_BIN_ID;
+    return CONFIG.JSONBIN_BIN_ID && CONFIG.JSONBIN_BIN_ID.length > 10;
 }
 
 // ===== Database Class =====
@@ -33,12 +33,9 @@ class Database {
         this.baseUrl = 'https://api.jsonbin.io/v3/b';
         this.cache = null;
         this.cacheTime = 0;
-        this.cacheExpiry = 3000; // 3 seconds
-        this.syncInterval = null;
     }
 
-    // Headers for API
-    getHeaders() {
+    headers() {
         return {
             'Content-Type': 'application/json',
             'X-Master-Key': CONFIG.JSONBIN_API_KEY,
@@ -46,117 +43,77 @@ class Database {
         };
     }
 
-    // Fetch database
     async fetch(force = false) {
         if (!isConfigured()) {
-            console.warn('Database not configured');
-            return this.getDefaultDB();
+            console.error('BIN_ID not configured!');
+            return this.defaultDB();
         }
 
-        // Use cache if valid
-        if (!force && this.cache && (Date.now() - this.cacheTime) < this.cacheExpiry) {
+        if (!force && this.cache && (Date.now() - this.cacheTime) < 3000) {
             return this.cache;
         }
 
         try {
-            const response = await fetch(`${this.baseUrl}/${CONFIG.JSONBIN_BIN_ID}/latest`, {
-                method: 'GET',
-                headers: this.getHeaders()
+            const res = await fetch(`${this.baseUrl}/${CONFIG.JSONBIN_BIN_ID}/latest`, {
+                headers: this.headers()
             });
-
-            if (!response.ok) throw new Error('Fetch failed');
-
-            const data = await response.json();
+            if (!res.ok) throw new Error('Fetch failed');
+            const data = await res.json();
             this.cache = data;
             this.cacheTime = Date.now();
             return data;
-        } catch (error) {
-            console.error('DB Fetch Error:', error);
-            return this.cache || this.getDefaultDB();
+        } catch (e) {
+            console.error('DB Error:', e);
+            return this.cache || this.defaultDB();
         }
     }
 
-    // Update database
-    async update(data) {
-        if (!isConfigured()) {
-            console.warn('Database not configured');
-            return false;
-        }
-
+    async save(data) {
+        if (!isConfigured()) return false;
         try {
-            const response = await fetch(`${this.baseUrl}/${CONFIG.JSONBIN_BIN_ID}`, {
+            await fetch(`${this.baseUrl}/${CONFIG.JSONBIN_BIN_ID}`, {
                 method: 'PUT',
-                headers: this.getHeaders(),
+                headers: this.headers(),
                 body: JSON.stringify(data)
             });
-
-            if (!response.ok) throw new Error('Update failed');
-
             this.cache = data;
             this.cacheTime = Date.now();
             return true;
-        } catch (error) {
-            console.error('DB Update Error:', error);
+        } catch (e) {
+            console.error('Save Error:', e);
             return false;
         }
     }
 
-    // Default database structure
-    getDefaultDB() {
+    defaultDB() {
         return {
             users: {},
-            gameState: {
-                id: null,
-                status: 'waiting',
-                bets: [],
-                crashPoint: null,
-                startTime: null,
-                multiplier: 1.00
-            },
+            gameState: { id: null, status: 'waiting', bets: [], crashPoint: null, multiplier: 1 },
             gameHistory: [],
             withdrawals: [],
-            settings: {
-                minBet: CONFIG.MIN_BET,
-                maxBet: CONFIG.MAX_BET,
-                minWithdraw: CONFIG.MIN_WITHDRAW,
-                houseEdge: CONFIG.HOUSE_EDGE,
-                bettingTime: CONFIG.BETTING_TIME,
-                adminId: CONFIG.ADMIN_TELEGRAM_ID,
-                tonWallet: CONFIG.TON_WALLET,
-                binId: CONFIG.JSONBIN_BIN_ID
-            },
-            stats: {
-                totalGames: 0,
-                totalBets: 0,
-                totalWagered: 0,
-                totalPayout: 0
-            }
+            settings: CONFIG,
+            stats: { totalGames: 0, totalBets: 0, totalWagered: 0 }
         };
     }
 
-    // ===== User Methods =====
-    
+    // User methods
     async getUser(oderId) {
         const db = await this.fetch();
         return db.users?.[oderId] || null;
     }
 
-    async createUser(oderId, userData) {
+    async createUser(oderId, data) {
         const db = await this.fetch(true);
-        
         if (!db.users) db.users = {};
         
         if (!db.users[oderId]) {
             db.users[oderId] = {
-                oderId: oderId,
-                odername: userData.username || 'Player',
-                firstName: userData.firstName || '',
-                lastName: userData.lastName || '',
-                username: userData.telegramUsername || '',
-                photoUrl: userData.photoUrl || '',
+                oderId,
+                odername: data.firstName || 'Player',
+                odername: data.firstName || 'Player',
+                username: data.username || '',
                 balance: 0,
                 totalWagered: 0,
-                totalProfit: 0,
                 biggestWin: 0,
                 gamesPlayed: 0,
                 wins: 0,
@@ -166,49 +123,39 @@ class Database {
                 createdAt: Date.now(),
                 lastActive: Date.now()
             };
-            await this.update(db);
+            await this.save(db);
         } else {
-            // Update last active
             db.users[oderId].lastActive = Date.now();
-            if (userData.photoUrl) db.users[oderId].photoUrl = userData.photoUrl;
-            await this.update(db);
+            await this.save(db);
         }
-        
         return db.users[oderId];
     }
 
-    async updateUserBalance(oderId, amount, operation = 'add') {
+    async updateBalance(oderId, amount, op = 'add') {
         const db = await this.fetch(true);
         const user = db.users?.[oderId];
-        
         if (!user) throw new Error('User not found');
         
-        const oldBalance = user.balance || 0;
+        if (op === 'add') user.balance = (user.balance || 0) + amount;
+        else if (op === 'subtract') {
+            if ((user.balance || 0) < amount) throw new Error('Insufficient balance');
+            user.balance -= amount;
+        } else if (op === 'set') user.balance = amount;
         
-        if (operation === 'add') {
-            user.balance = oldBalance + amount;
-        } else if (operation === 'subtract') {
-            if (oldBalance < amount) throw new Error('Insufficient balance');
-            user.balance = oldBalance - amount;
-        } else if (operation === 'set') {
-            user.balance = amount;
-        }
-        
-        await this.update(db);
+        await this.save(db);
         return user.balance;
     }
 
-    // ===== Game Methods =====
-    
+    // Game methods
     async getGameState() {
         const db = await this.fetch();
         return db.gameState || { status: 'waiting', bets: [] };
     }
 
-    async updateGameState(gameData) {
+    async updateGame(data) {
         const db = await this.fetch(true);
-        db.gameState = { ...db.gameState, ...gameData };
-        await this.update(db);
+        db.gameState = { ...db.gameState, ...data };
+        await this.save(db);
         return db.gameState;
     }
 
@@ -218,108 +165,81 @@ class Database {
         
         if (!user) throw new Error('User not found');
         if ((user.balance || 0) < amount) throw new Error('Insufficient balance');
-        if (db.gameState?.status !== 'betting') throw new Error('Betting is closed');
+        if (db.gameState?.status !== 'betting') throw new Error('Betting closed');
+        if (db.gameState.bets?.find(b => b.oderId === oderId)) throw new Error('Already bet');
         
-        // Check if already bet
-        const existingBet = db.gameState.bets?.find(b => b visually === oderId);
-        if (existingBet) throw new Error('Already placed a bet');
-        
-        // Deduct balance
         user.balance -= amount;
         user.totalWagered = (user.totalWagered || 0) + amount;
         
-        // Add bet
-        if (!db.gameState.bets) db.gameState.bets = [];
-        
         const bet = {
-            oderId: oderId,
-            username: user.odername || user.firstName || 'Player',
-            photoUrl: user.photoUrl || '',
-            amount: amount,
-            autoCashout: autoCashout,
+            oderId,
+            username: user.odername || 'Player',
+            amount,
+            autoCashout,
             cashedOut: false,
-            cashoutMultiplier: null,
+            multiplier: null,
             profit: 0,
-            timestamp: Date.now()
+            time: Date.now()
         };
         
+        if (!db.gameState.bets) db.gameState.bets = [];
         db.gameState.bets.push(bet);
         
-        // Update stats
         db.stats = db.stats || {};
         db.stats.totalBets = (db.stats.totalBets || 0) + 1;
         db.stats.totalWagered = (db.stats.totalWagered || 0) + amount;
         
-        await this.update(db);
-        
+        await this.save(db);
         return { success: true, balance: user.balance, bet };
     }
 
-    async cashoutBet(oderId, multiplier) {
+    async cashout(oderId, multiplier) {
         const db = await this.fetch(true);
         const bet = db.gameState?.bets?.find(b => b.oderId === oderId && !b.cashedOut);
         
-        if (!bet) throw new Error('No active bet found');
+        if (!bet) throw new Error('No active bet');
         if (db.gameState?.status !== 'running') throw new Error('Game not running');
         
         const profit = (bet.amount * multiplier) - bet.amount;
-        const totalReturn = bet.amount + profit;
+        const total = bet.amount + profit;
         
         bet.cashedOut = true;
-        bet.cashoutMultiplier = multiplier;
+        bet.multiplier = multiplier;
         bet.profit = profit;
         
-        // Add winnings to user
         const user = db.users[oderId];
         if (user) {
-            user.balance = (user.balance || 0) + totalReturn;
+            user.balance = (user.balance || 0) + total;
             user.wins = (user.wins || 0) + 1;
-            user.totalProfit = (user.totalProfit || 0) + profit;
+            if (profit > (user.biggestWin || 0)) user.biggestWin = profit;
             
-            if (profit > (user.biggestWin || 0)) {
-                user.biggestWin = profit;
-            }
-            
-            // Add to bet history
             if (!user.betHistory) user.betHistory = [];
             user.betHistory.unshift({
                 gameId: db.gameState.id,
                 amount: bet.amount,
-                multiplier: multiplier,
-                profit: profit,
+                multiplier,
+                profit,
                 result: 'win',
-                timestamp: Date.now()
+                time: Date.now()
             });
-            
-            // Keep last 100
-            if (user.betHistory.length > 100) {
-                user.betHistory = user.betHistory.slice(0, 100);
-            }
+            if (user.betHistory.length > 50) user.betHistory = user.betHistory.slice(0, 50);
         }
         
-        // Update stats
-        db.stats = db.stats || {};
-        db.stats.totalPayout = (db.stats.totalPayout || 0) + totalReturn;
-        
-        await this.update(db);
-        
-        return { success: true, profit, totalReturn, balance: user?.balance || 0 };
+        await this.save(db);
+        return { success: true, profit, total, balance: user?.balance || 0 };
     }
 
     async endGame(crashPoint) {
         const db = await this.fetch(true);
         
-        // Process all uncashed bets as losses
         for (const bet of (db.gameState?.bets || [])) {
             if (!bet.cashedOut) {
-                bet.cashoutMultiplier = crashPoint;
+                bet.multiplier = crashPoint;
                 bet.profit = -bet.amount;
                 
                 const user = db.users[bet.oderId];
                 if (user) {
                     user.losses = (user.losses || 0) + 1;
-                    user.totalProfit = (user.totalProfit || 0) - bet.amount;
-                    
                     if (!user.betHistory) user.betHistory = [];
                     user.betHistory.unshift({
                         gameId: db.gameState.id,
@@ -327,154 +247,101 @@ class Database {
                         multiplier: crashPoint,
                         profit: -bet.amount,
                         result: 'loss',
-                        timestamp: Date.now()
+                        time: Date.now()
                     });
-                    
-                    if (user.betHistory.length > 100) {
-                        user.betHistory = user.betHistory.slice(0, 100);
-                    }
+                    if (user.betHistory.length > 50) user.betHistory = user.betHistory.slice(0, 50);
                 }
             }
             
-            // Update games played
             const user = db.users[bet.oderId];
-            if (user) {
-                user.gamesPlayed = (user.gamesPlayed || 0) + 1;
-            }
+            if (user) user.gamesPlayed = (user.gamesPlayed || 0) + 1;
         }
         
-        // Save to history
         if (!db.gameHistory) db.gameHistory = [];
         db.gameHistory.unshift({
             id: db.gameState.id,
-            crashPoint: crashPoint,
-            betsCount: db.gameState.bets?.length || 0,
-            totalWagered: db.gameState.bets?.reduce((sum, b) => sum + b.amount, 0) || 0,
-            timestamp: Date.now()
+            crashPoint,
+            bets: db.gameState.bets?.length || 0,
+            time: Date.now()
         });
+        if (db.gameHistory.length > 50) db.gameHistory = db.gameHistory.slice(0, 50);
         
-        // Keep last 100 games
-        if (db.gameHistory.length > 100) {
-            db.gameHistory = db.gameHistory.slice(0, 100);
-        }
-        
-        // Update stats
         db.stats = db.stats || {};
         db.stats.totalGames = (db.stats.totalGames || 0) + 1;
         
-        await this.update(db);
-        
+        await this.save(db);
         return crashPoint;
     }
 
-    async startNewGame() {
+    async newGame() {
         const db = await this.fetch(true);
         
-        const crashPoint = this.generateCrashPoint();
+        const houseEdge = CONFIG.HOUSE_EDGE;
+        const r = Math.random();
+        let crash = r < houseEdge ? 1.00 : Math.max(1, Math.min(1000, Math.floor((0.99 / (1 - r)) * 100) / 100));
         
         db.gameState = {
-            id: `GAME_${Date.now()}`,
+            id: 'G_' + Date.now(),
             status: 'betting',
             bets: [],
-            crashPoint: crashPoint,
-            startTime: null,
-            multiplier: 1.00
+            crashPoint: crash,
+            multiplier: 1
         };
         
-        await this.update(db);
-        
+        await this.save(db);
         return db.gameState;
     }
 
-    generateCrashPoint() {
-        const houseEdge = CONFIG.HOUSE_EDGE;
-        const random = Math.random();
-        
-        // House edge - sometimes instant crash
-        if (random < houseEdge) {
-            return 1.00;
-        }
-        
-        // Exponential distribution
-        const crash = 0.99 / (1 - random);
-        return Math.max(1.00, Math.min(1000, Math.floor(crash * 100) / 100));
-    }
-
-    async getGameHistory(limit = 20) {
+    async getHistory(limit = 20) {
         const db = await this.fetch();
         return (db.gameHistory || []).slice(0, limit);
     }
 
-    // ===== Withdrawal Methods =====
-    
-    async requestWithdrawal(oderId, amount, walletAddress) {
+    // Withdrawal
+    async withdraw(oderId, amount, address) {
         const db = await this.fetch(true);
         const user = db.users?.[oderId];
         
         if (!user) throw new Error('User not found');
-        if (amount < CONFIG.MIN_WITHDRAW) throw new Error(`Minimum withdrawal is ${CONFIG.MIN_WITHDRAW} TON`);
+        if (amount < CONFIG.MIN_WITHDRAW) throw new Error('Min: ' + CONFIG.MIN_WITHDRAW + ' TON');
         if ((user.balance || 0) < amount) throw new Error('Insufficient balance');
         
-        // Deduct balance
         user.balance -= amount;
         
-        // Create request
-        const request = {
-            id: `WD_${Date.now()}`,
-            oderId: oderId,
-            username: user.odername || user.firstName,
-            amount: amount,
-            walletAddress: walletAddress,
+        const req = {
+            id: 'W_' + Date.now(),
+            oderId,
+            username: user.odername,
+            amount,
+            address,
             status: 'pending',
-            createdAt: Date.now(),
-            processedAt: null
+            createdAt: Date.now()
         };
         
         if (!db.withdrawals) db.withdrawals = [];
-        db.withdrawals.push(request);
+        db.withdrawals.push(req);
         
-        // Add to transactions
         if (!user.transactions) user.transactions = [];
-        user.transactions.unshift({
-            type: 'withdrawal',
-            amount: -amount,
-            status: 'pending',
-            id: request.id,
-            timestamp: Date.now()
-        });
+        user.transactions.unshift({ type: 'withdraw', amount: -amount, status: 'pending', id: req.id, time: Date.now() });
         
-        await this.update(db);
-        
-        return request;
+        await this.save(db);
+        return req;
     }
 
-    async processWithdrawal(id, approved) {
+    async processWithdraw(id, approved) {
         const db = await this.fetch(true);
-        const request = db.withdrawals?.find(w => w.id === id);
+        const req = db.withdrawals?.find(w => w.id === id);
+        if (!req) throw new Error('Not found');
         
-        if (!request) throw new Error('Withdrawal not found');
+        req.status = approved ? 'approved' : 'rejected';
+        req.processedAt = Date.now();
         
-        request.status = approved ? 'approved' : 'rejected';
-        request.processedAt = Date.now();
-        
-        // If rejected, refund
-        if (!approved) {
-            const user = db.users[request.oderId];
-            if (user) {
-                user.balance = (user.balance || 0) + request.amount;
-            }
+        if (!approved && db.users[req.oderId]) {
+            db.users[req.oderId].balance += req.amount;
         }
         
-        // Update transaction status
-        const user = db.users[request.oderId];
-        if (user?.transactions) {
-            const tx = user.transactions.find(t => t.id === id);
-            if (tx) tx.status = request.status;
-        }
-        
-        await this.update(db);
-        
-        return request;
+        await this.save(db);
+        return req;
     }
 
     async getPendingWithdrawals() {
@@ -482,95 +349,27 @@ class Database {
         return (db.withdrawals || []).filter(w => w.status === 'pending');
     }
 
-    // ===== Deposit Methods =====
-    
-    async addDeposit(oderId, amount, source = 'manual') {
-        const db = await this.fetch(true);
-        const user = db.users?.[oderId];
-        
-        if (!user) throw new Error('User not found');
-        
-        user.balance = (user.balance || 0) + amount;
-        
-        if (!user.transactions) user.transactions = [];
-        user.transactions.unshift({
-            type: 'deposit',
-            amount: amount,
-            source: source,
-            status: 'completed',
-            timestamp: Date.now()
-        });
-        
-        await this.update(db);
-        
-        return user.balance;
-    }
-
-    // ===== Gift Methods =====
-    
-    async processGiftSale(oderId, giftType, giftValue) {
-        const db = await this.fetch(true);
-        const user = db.users?.[oderId];
-        
-        if (!user) throw new Error('User not found');
-        
-        user.balance = (user.balance || 0) + giftValue;
-        
-        if (!user.transactions) user.transactions = [];
-        user.transactions.unshift({
-            type: 'gift_sale',
-            giftType: giftType,
-            amount: giftValue,
-            status: 'completed',
-            timestamp: Date.now()
-        });
-        
-        await this.update(db);
-        
-        return user.balance;
-    }
-
-    // ===== Admin Methods =====
-    
     async getAllUsers() {
         const db = await this.fetch();
         return db.users || {};
+    }
+
+    async setBalance(oderId, amount) {
+        const db = await this.fetch(true);
+        if (db.users?.[oderId]) {
+            db.users[oderId].balance = amount;
+            await this.save(db);
+        }
+        return db.users?.[oderId];
     }
 
     async getStats() {
         const db = await this.fetch();
         return db.stats || {};
     }
-
-    async getSettings() {
-        const db = await this.fetch();
-        return db.settings || {};
-    }
-
-    async updateSettings(settings) {
-        const db = await this.fetch(true);
-        db.settings = { ...db.settings, ...settings };
-        await this.update(db);
-        return db.settings;
-    }
-
-    async setUserBalance(oderId, newBalance) {
-        const db = await this.fetch(true);
-        const user = db.users?.[oderId];
-        
-        if (!user) throw new Error('User not found');
-        
-        user.balance = newBalance;
-        await this.update(db);
-        
-        return user;
-    }
 }
 
-// Create global instance
 const db = new Database();
-
-// Export config check
-window.isConfigured = isConfigured;
-window.CONFIG = CONFIG;
 window.db = db;
+window.CONFIG = CONFIG;
+window.isConfigured = isConfigured;
