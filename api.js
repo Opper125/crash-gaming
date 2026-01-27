@@ -12,6 +12,16 @@ const CONFIG = {
     
     // TON
     TON_WALLET: 'UQCVA9Y95Rh59Nz_kSjbxCCNogCsL5oog2dhQKrGvoKxHfdn',
+
+    // TON Center / TonAPI (optional, used for auto-verification)
+    // If you have a key, set it here for higher rate limits.
+    TONCENTER_API_KEY: '',
+
+    // Gift (Telegram Collectible / TON NFT) deposit settings
+    // Owner receives NFT to this TON wallet (same wallet can be used)
+    GIFT_OWNER_WALLET: 'UQCVA9Y95Rh59Nz_kSjbxCCNogCsL5oog2dhQKrGvoKxHfdn',
+    // Default credit if price cannot be detected (TON)
+    GIFT_FALLBACK_CREDIT: 1,
     
     // Game
     MIN_BET: 0.1,
@@ -91,6 +101,18 @@ class Database {
             gameState: { id: null, status: 'waiting', bets: [], crashPoint: null, multiplier: 1 },
             gameHistory: [],
             withdrawals: [],
+
+            // Gift/NFT deposits
+            giftDeposits: [],
+            giftPriceTable: {
+                // You can fine-tune later in Admin (or directly in JSONBin)
+                // key can be collection address or a known NFT item address
+                // Example:
+                // "EQC...collection": 5,
+                // "EQC...nftItem": 2
+            },
+            processedNftTransfers: {},
+
             settings: CONFIG,
             stats: { totalGames: 0, totalBets: 0, totalWagered: 0 }
         };
@@ -175,6 +197,7 @@ class Database {
             oderId,
             username: user.odername || 'Player',
             amount,
+            autoCashout,
             autoCashout,
             cashedOut: false,
             multiplier: null,
@@ -366,6 +389,142 @@ class Database {
     async getStats() {
         const db = await this.fetch();
         return db.stats || {};
+    }
+
+    // ===== Gift / NFT Deposit =====
+    _giftDepositId(oderId) {
+        return `GF_${oderId}_${Date.now()}`;
+    }
+
+    async createGiftDepositRequest(oderId) {
+        const db = await this.fetch(true);
+        if (!db.giftDeposits) db.giftDeposits = [];
+
+        const req = {
+            id: this._giftDepositId(oderId),
+            oderId,
+            status: 'pending',
+            createdAt: Date.now(),
+            creditTon: 0,
+            nft: null
+        };
+        db.giftDeposits.unshift(req);
+        if (db.giftDeposits.length > 200) db.giftDeposits = db.giftDeposits.slice(0, 200);
+        await this.save(db);
+        return req;
+    }
+
+    async getGiftDeposits(oderId) {
+        const db = await this.fetch();
+        const list = db.giftDeposits || [];
+        return oderId ? list.filter(x => x.oderId === oderId) : list;
+    }
+
+    async _toncenterListNftTransfers(limit = 30) {
+        // Toncenter v3 endpoint (public). If key is empty, it still works but might be rate-limited.
+        // Docs: https://docs.ton.org/ecosystem/api/toncenter/v3/nfts/list-nft-transfers
+        const base = 'https://toncenter.com/api/v3/nfts/transfers';
+        const params = new URLSearchParams({
+            limit: String(limit),
+            // We only care about transfers where new owner = our owner wallet
+            new_owner: CONFIG.GIFT_OWNER_WALLET
+        });
+        if (CONFIG.TONCENTER_API_KEY) params.set('api_key', CONFIG.TONCENTER_API_KEY);
+
+        const url = `${base}?${params.toString()}`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error('TONCenter API error');
+        return await res.json();
+    }
+
+    _extractGiftDepositIdFromTransfer(t) {
+        // We try to parse text comment from decoded_forward_payload
+        // Some wallets put it in decoded_forward_payload.comment
+        const c = t?.decoded_forward_payload?.comment || '';
+        if (!c) return null;
+        const m = c.match(/GF_[^\s]+/);
+        return m ? m[0] : null;
+    }
+
+    _creditFromTransfer(db, t) {
+        // Determine credit amount from price table
+        const table = db.giftPriceTable || {};
+        const nftItem = t.nft_address;
+        const coll = t.nft_collection;
+        if (nftItem && table[nftItem]) return Number(table[nftItem]);
+        if (coll && table[coll]) return Number(table[coll]);
+        return Number(CONFIG.GIFT_FALLBACK_CREDIT || 1);
+    }
+
+    async verifyGiftDeposit(oderId) {
+        const db = await this.fetch(true);
+        if (!db.giftDeposits) db.giftDeposits = [];
+        if (!db.processedNftTransfers) db.processedNftTransfers = {};
+
+        // Find latest pending request of this user
+        const req = db.giftDeposits.find(x => x.oderId === oderId && x.status === 'pending');
+        if (!req) throw new Error('No pending gift request');
+
+        // Pull latest transfers
+        const data = await this._toncenterListNftTransfers(50);
+        const list = data.nft_transfers || [];
+
+        // Match by GF_... id embedded in comment
+        const match = list.find(t => {
+            const id = this._extractGiftDepositIdFromTransfer(t);
+            if (!id || id !== req.id) return false;
+            // Prevent double credit by tx hash/lt
+            const k = `${t.transaction_hash}_${t.transaction_lt}`;
+            if (db.processedNftTransfers[k]) return false;
+            return true;
+        });
+
+        if (!match) {
+            return { ok: false, message: 'Not found yet. Try again in 10-30 seconds.' };
+        }
+
+        const credit = this._creditFromTransfer(db, match);
+
+        // Credit user
+        const user = db.users?.[oderId];
+        if (!user) throw new Error('User not found');
+        user.balance = (user.balance || 0) + credit;
+
+        // Log transaction
+        if (!user.transactions) user.transactions = [];
+        user.transactions.unshift({
+            type: 'gift',
+            amount: credit,
+            status: 'confirmed',
+            id: req.id,
+            time: Date.now(),
+            meta: {
+                nft_address: match.nft_address,
+                nft_collection: match.nft_collection,
+                old_owner: match.old_owner,
+                new_owner: match.new_owner,
+                tx_hash: match.transaction_hash,
+                tx_lt: match.transaction_lt
+            }
+        });
+
+        // Mark request
+        req.status = 'confirmed';
+        req.confirmedAt = Date.now();
+        req.creditTon = credit;
+        req.nft = {
+            nft_address: match.nft_address,
+            nft_collection: match.nft_collection,
+            tx_hash: match.transaction_hash,
+            tx_lt: match.transaction_lt
+        };
+
+        // Mark transfer processed
+        const k = `${match.transaction_hash}_${match.transaction_lt}`;
+        db.processedNftTransfers[k] = true;
+
+        await this.save(db);
+        return { ok: true, credit };
     }
 }
 
