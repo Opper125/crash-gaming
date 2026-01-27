@@ -240,11 +240,28 @@
 
                 <!-- Gift -->
                 <div class="wallet-section hidden" id="giftSection">
-                    <h3>🎁 Sell Gift</h3>
+                    <h3>🎁 Collectible Gift Deposit</h3>
                     <div class="gift-info">
-                        <p>Transfer your Telegram gift to:</p>
-                        <p class="bot-name">@crash_gambaimbot</p>
-                        <p>Balance will be credited automatically!</p>
+                        <p style="margin-bottom:10px;">Transfer your Telegram Collectible (TON NFT) to:</p>
+                        <p class="bot-name" id="giftOwnerBot">@crash_gambaimbot</p>
+
+                        <div class="address-box" style="margin-top:12px;">
+                            <code id="giftDepositId">GF_...</code>
+                            <button onclick="copyGiftId()">📋</button>
+                        </div>
+                        <p style="font-size:12px;color:var(--text2);margin-top:8px;">Paste this ID as the transfer comment/description when possible. This helps auto-credit.</p>
+
+                        <button class="submit-btn" id="giftCheckBtn" style="margin-top:12px;" onclick="checkGiftDeposit()">✅ I TRANSFERRED – CHECK</button>
+                        <div class="notes" style="margin-top:10px;text-align:center;">
+                            <p id="giftStatusText">Waiting for your transfer...</p>
+                        </div>
+                    </div>
+
+                    <div style="margin-top:14px;">
+                        <h3 style="font-size:14px;margin-bottom:10px;">Recent Gift Deposits</h3>
+                        <div id="giftHistoryList">
+                            <div class="empty-tx">No gift deposits</div>
+                        </div>
                     </div>
                 </div>
 
