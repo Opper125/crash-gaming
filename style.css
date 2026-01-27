@@ -182,9 +182,15 @@ button { cursor: pointer; }
 .form-group { margin-bottom: 14px; }
 .form-group label { display: block; font-size: 12px; color: var(--text2); margin-bottom: 6px; }
 .form-group input { width: 100%; padding: 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 15px; }
-.submit-btn { width: 100%; padding: 14px; background: linear-gradient(135deg, var(--primary), #5c9cff); border-radius: 10px; color: white; font-size: 16px; font-weight: 600; }
-.gift-info { text-align: center; padding: 20px; }
-.gift-info .bot-name { font-size: 18px; font-weight: 700; color: var(--primary); margin: 10px 0; }
+.submit-btn { width: 100%; padding: 14px; background: linear-gradient(135deg, var(--primary), #5c9cff); border-radius: 10px; color: white; font-size: 16px; font-weight: 600; position: relative; overflow: hidden; }
+
+/* Button ripple + loading */
+.submit-btn::after { content: ''; position: absolute; inset: 0; background: radial-gradient(circle at var(--rx,50%) var(--ry,50%), rgba(255,255,255,0.25), transparent 40%); opacity: 0; transition: opacity .25s; }
+.submit-btn:active::after { opacity: 1; }
+.submit-btn.loading { opacity: .85; }
+.submit-btn.loading::before { content: '⏳'; position: absolute; right: 14px; top: 50%; transform: translateY(-50%); }
+.gift-info { text-align: center; padding: 18px; background: linear-gradient(180deg, rgba(124,92,255,0.10), rgba(0,0,0,0)); border: 1px solid var(--border); border-radius: 12px; }
+.gift-info .bot-name { font-size: 18px; font-weight: 800; color: var(--primary); margin: 10px 0; letter-spacing: .4px; }
 .transactions-section h3 { font-size: 16px; margin-bottom: 12px; }
 .empty-tx { text-align: center; padding: 20px; color: var(--text3); font-size: 13px; }
 .tx-item { display: flex; justify-content: space-between; align-items: center; padding: 12px; background: var(--card); border-radius: 8px; margin-bottom: 8px; }
