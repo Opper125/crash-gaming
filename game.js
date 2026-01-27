@@ -120,31 +120,53 @@ class CrashGame {
         await db.updateGame({ status: 'running', startTime: this.startTime });
         this.hideCountdown();
         this.updateUI();
-        this.loopId = setInterval(() => this.loop(), 50);
+        // Use requestAnimationFrame loop for smoother multiplier updates
+        this.lastFrameTs = null;
+        this.runAnim = true;
+        this.rafLoop();
     }
 
-    loop() {
-        if (this.state !== 'running') return;
+    // Smooth RAF loop (no stutter) + gradual acceleration
+    rafLoop(ts = performance.now()) {
+        if (!this.runAnim || this.state !== 'running') return;
+
+        if (this.lastFrameTs == null) this.lastFrameTs = ts;
+        // Clamp delta to avoid huge jumps when tab is backgrounded
+        const dt = Math.min(0.05, Math.max(0.0, (ts - this.lastFrameTs) / 1000));
+        this.lastFrameTs = ts;
+
+        // Time since round start
         const t = (Date.now() - this.startTime) / 1000;
-        let sp = 1;
-        if (this.multiplier >= 2) sp = 1.2;
-        if (this.multiplier >= 5) sp = 1.5;
-        if (this.multiplier >= 10) sp = 2;
-        if (this.multiplier >= 50) sp = 3;
-        
-        this.multiplier = Math.pow(Math.E, 0.012 * sp * t * 10);
-        this.multiplier = Math.floor(this.multiplier * 100) / 100;
-        
-        const p = Math.min(0.95, (this.multiplier - 1) / 20);
+
+        // Continuous acceleration curve: starts slow, ramps up smoothly
+        // sp ~ 1.0 at start, gradually increases with multiplier
+        const sp = 1 + Math.min(4.5, Math.pow(Math.max(0, this.multiplier - 1), 0.35) * 0.9);
+
+        // Exponential growth with smooth dt integration
+        // k controls base speed; sp adds gradual acceleration
+        const k = 0.55; // tuned for smooth start
+        this.multiplier *= Math.exp(k * sp * dt);
+
+        // Keep 2 decimals (but do NOT cause visual jitter)
+        this.multiplier = Math.max(1, this.multiplier);
+        const shown = Math.floor(this.multiplier * 100) / 100;
+
+        // Path progress based on shown multiplier (stable)
+        const p = Math.min(0.95, (shown - 1) / 20);
         const x = 40 + p * (this.canvas.width - 80);
         const y = this.canvas.height - 40 - Math.pow(p, 0.7) * (this.canvas.height - 80);
         this.path.push({ x, y });
-        if (this.path.length > 300) this.path = this.path.slice(-300);
-        
+        if (this.path.length > 420) this.path = this.path.slice(-420);
+
         this.checkAuto();
-        this.updateMult();
-        
-        if (this.multiplier >= this.crashPoint) this.doCrash(this.crashPoint);
+        this.updateMultValue(shown);
+
+        if (shown >= this.crashPoint) {
+            this.doCrash(this.crashPoint);
+            return;
+        }
+
+        requestAnimationFrame((t2) => this.rafLoop(t2));
     }
 
     checkAuto() {
@@ -155,6 +177,8 @@ class CrashGame {
 
     async doCrash(cp) {
         clearInterval(this.loopId);
+        this.runAnim = false;
+        this.lastFrameTs = null;
         this.state = 'crashed';
         this.multiplier = cp;
         await db.endGame(cp);
@@ -342,12 +366,12 @@ class CrashGame {
         this.updateBets();
     }
 
-    updateMult() {
+    updateMultValue(displayMultiplier) {
         const m = document.getElementById('multiplierDisplay');
-        if (m) m.innerHTML = `${this.multiplier.toFixed(2)}<span class="x">x</span>`;
+        if (m) m.innerHTML = `${displayMultiplier.toFixed(2)}<span class="x">x</span>`;
         if (this.myBet && !this.myBet.cashedOut) {
             const t = document.getElementById('betButtonText');
-            if (t) t.textContent = `CASH OUT ${(this.myBet.amount * this.multiplier).toFixed(2)} TON`;
+            if (t) t.textContent = `CASH OUT ${(this.myBet.amount * displayMultiplier).toFixed(2)} TON`;
         }
     }
 
