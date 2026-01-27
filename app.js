@@ -181,10 +181,94 @@ function openWallet() {
     openModal('walletModal');
 }
 
-function showSection(s) {
+async function loadGiftPanel() {
+    if (!window.currentUser) return;
+
+    // Update owner info
+    const ownerBot = document.getElementById('giftOwnerBot');
+    if (ownerBot) ownerBot.textContent = '@' + CONFIG.BOT_USERNAME;
+
+    // Create or reuse pending request
+    const statusEl = document.getElementById('giftStatusText');
+    const idEl = document.getElementById('giftDepositId');
+    const listEl = document.getElementById('giftHistoryList');
+
+    try {
+        const my = await db.getGiftDeposits(window.currentUser.oderId);
+        let pending = my.find(x => x.status === 'pending');
+        if (!pending) {
+            pending = await db.createGiftDepositRequest(window.currentUser.oderId);
+        }
+        if (idEl) idEl.textContent = pending.id;
+        if (statusEl) statusEl.textContent = 'Waiting for your transfer...';
+
+        // Render history
+        if (listEl) {
+            const sorted = (my || []).slice(0, 10);
+            if (!sorted.length) {
+                listEl.innerHTML = '<div class="empty-tx">No gift deposits yet</div>';
+            } else {
+                listEl.innerHTML = sorted.map(x => {
+                    const ok = x.status === 'confirmed';
+                    const cls = ok ? 'positive' : 'pending';
+                    const amt = ok ? `+${(x.creditTon || 0).toFixed(2)} TON` : 'PENDING';
+                    return `<div class="tx-item"><div class="tx-info"><div class="tx-icon">🎁</div><div><div class="tx-type">Gift Deposit</div><div class="tx-date">${new Date(x.createdAt).toLocaleString()}</div><div class="tx-date" style="opacity:.9">ID: ${x.id}</div></div></div><div class="tx-amount ${cls}">${amt}</div></div>`;
+                }).join('');
+            }
+        }
+    } catch (e) {
+        if (statusEl) statusEl.textContent = 'Error: ' + e.message;
+    }
+}
+
+function copyGiftId() {
+    const id = document.getElementById('giftDepositId')?.textContent?.trim();
+    if (!id) return;
+    navigator.clipboard.writeText(id);
+    showToast('Gift Deposit ID copied!', 'success');
+    haptic('light');
+}
+
+async function checkGiftDeposit() {
+    if (!window.currentUser) return;
+    const btn = document.getElementById('giftCheckBtn');
+    const statusEl = document.getElementById('giftStatusText');
+
+    try {
+        if (btn) { btn.disabled = true; btn.classList.add('loading'); }
+        if (statusEl) statusEl.textContent = 'Checking blockchain...';
+
+        const r = await db.verifyGiftDeposit(window.currentUser.oderId);
+        if (!r.ok) {
+            if (statusEl) statusEl.textContent = r.message;
+            showToast(r.message, 'info');
+        } else {
+            await refreshUser();
+            updateBalance();
+            if (statusEl) statusEl.textContent = `✅ Credited +${r.credit.toFixed(2)} TON`;
+            showToast(`Gift credited +${r.credit.toFixed(2)} TON`, 'success');
+            haptic('success');
+            await loadGiftPanel();
+            await loadTx();
+        }
+    } catch (e) {
+        if (statusEl) statusEl.textContent = 'Error: ' + e.message;
+        showToast(e.message, 'error');
+    } finally {
+        if (btn) { btn.disabled = false; btn.classList.remove('loading'); }
+    }
+}
+
+window.copyGiftId = copyGiftId;
+window.checkGiftDeposit = checkGiftDeposit;
+
+async function showSection(s) {
     ['deposit', 'withdraw', 'gift'].forEach(x => {
         document.getElementById(x + 'Section')?.classList.toggle('hidden', x !== s);
     });
+    if (s === 'gift') {
+        await loadGiftPanel();
+    }
 }
 
 function copyAddress() {
