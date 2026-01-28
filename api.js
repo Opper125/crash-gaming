@@ -25,7 +25,7 @@ const CONFIG = {
     
     // Game
     MIN_BET: 0.1,
-    MAX_BET: 100,
+    MAX_BET: 10000,
     MIN_WITHDRAW: 1,
     HOUSE_EDGE: 0.03,
     BETTING_TIME: 10,
