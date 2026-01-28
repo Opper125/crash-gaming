@@ -15,7 +15,7 @@ const CONFIG = {
 
     // TON Center / TonAPI (optional, used for auto-verification)
     // If you have a key, set it here for higher rate limits.
-    TONCENTER_API_KEY: '',
+    TONCENTER_API_KEY: 'AF7WI32MFLZONNIAAAAKMYFEWR4TQ6T3YNECXQTJE53QABLMIAHOKK6OOQT4DKL5DVWKM3Y',
 
     // Gift (Telegram Collectible / TON NFT) deposit settings
     // Owner receives NFT to this TON wallet (same wallet can be used)
